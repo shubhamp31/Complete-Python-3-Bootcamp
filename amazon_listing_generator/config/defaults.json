@@ -1,0 +1,23 @@
+{
+  "marketplace": "amazon_in",
+  "brand": "Lukson",
+  "manufacturer": "Lukson",
+  "country_of_origin": "India",
+  "metal_type": "Gold",
+  "stone_creation_method": "Lab Grown",
+  "stone_type": "Diamond",
+  "department_name": "Women",
+  "target_gender": "female",
+  "feed_product_type": "ring",
+  "currency": "INR",
+  "item_weight_unit_of_measure": "GR",
+  "update_delete": "Update",
+  "fulfillment_latency": 3,
+  "default_quantity": 1,
+  "generic_keywords_max_bytes": 200,
+  "max_additional_images": 8,
+  "output_file_name": "Amazon Upload File.xlsm",
+  "validation_report_name": "Validation Report.xlsx",
+  "error_report_name": "Error Report.xlsx",
+  "summary_report_name": "Summary Report.xlsx"
+}

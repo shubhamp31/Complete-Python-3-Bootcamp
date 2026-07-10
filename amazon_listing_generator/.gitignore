@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+*.spec.bak
+outputs/*
+!outputs/.gitkeep
+logs/*
+!logs/.gitkeep
+templates/*.xlsm
+templates/*.xlsx
+.venv/
+venv/

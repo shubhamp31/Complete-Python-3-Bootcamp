@@ -1,0 +1,14 @@
+# Amazon India Listing Generator - Lukson
+# Python 3.12+ recommended (3.11 minimum)
+
+pandas>=2.2
+numpy>=1.26
+openpyxl>=3.1
+pydantic>=2.7
+customtkinter>=5.2
+
+# Development / testing
+pytest>=8.0
+
+# Packaging
+pyinstaller>=6.6

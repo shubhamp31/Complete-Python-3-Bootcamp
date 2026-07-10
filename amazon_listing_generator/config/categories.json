@@ -1,0 +1,39 @@
+{
+  "default": {
+    "feed_product_type": "fashionjewelry",
+    "product_type_label": "Jewellery",
+    "browse_node": "1951048031"
+  },
+  "categories": [
+    {
+      "match_keywords": ["ring", "band", "solitaire"],
+      "feed_product_type": "ring",
+      "product_type_label": "Ring",
+      "browse_node": "1951050031"
+    },
+    {
+      "match_keywords": ["earring", "stud", "hoop", "jhumka", "drop earring"],
+      "feed_product_type": "earring",
+      "product_type_label": "Earrings",
+      "browse_node": "1951049031"
+    },
+    {
+      "match_keywords": ["pendant", "necklace", "chain", "mangalsutra", "choker"],
+      "feed_product_type": "necklace",
+      "product_type_label": "Pendant Necklace",
+      "browse_node": "1951051031"
+    },
+    {
+      "match_keywords": ["bracelet", "bangle", "kada", "cuff"],
+      "feed_product_type": "bracelet",
+      "product_type_label": "Bracelet",
+      "browse_node": "1951047031"
+    },
+    {
+      "match_keywords": ["nose pin", "nosepin", "nose ring"],
+      "feed_product_type": "fashionjewelry",
+      "product_type_label": "Nose Pin",
+      "browse_node": "1951048031"
+    }
+  ]
+}

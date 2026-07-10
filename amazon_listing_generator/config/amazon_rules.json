@@ -1,0 +1,92 @@
+{
+  "title": {
+    "max_length": 200,
+    "template": "{brand} {purity} {metal_type} {stone_phrase} {product_type} {collection_phrase}for {audience} | Fine Jewellery",
+    "audience_default": "Women",
+    "stone_phrase_template": "{stone_creation_method} {stone_type}",
+    "collection_prefix": "",
+    "banned_words": ["free", "cheap", "best seller", "hot item", "guarantee", "sale", "discount"]
+  },
+  "bullets": {
+    "count": 5,
+    "max_length": 500,
+    "templates": [
+      "PURITY & METAL: Crafted in certified {purity} {metal_type} with a BIS Hallmark, ensuring authentic precious metal quality in every piece.",
+      "LAB GROWN DIAMOND: Features {stone_detail} - ethically created, conflict-free and visually identical to mined diamonds at exceptional value.",
+      "EXPERT CRAFTSMANSHIP: Each {product_type_lower} is handcrafted by Lukson artisans with precision setting and a premium mirror-polish finish.",
+      "PERFECT FOR EVERY OCCASION: Elegant {product_type_lower} designed for weddings, engagements, anniversaries, festivals and everyday luxury.",
+      "IDEAL GIFT: Arrives in premium Lukson packaging with an authenticity certificate - a memorable gift for birthdays, anniversaries and special moments."
+    ]
+  },
+  "description": {
+    "max_length": 2000,
+    "strip_html": true,
+    "template": "{title}. {body} Crafted in {purity} {metal_type} with {stone_phrase}, this piece reflects Lukson's commitment to fine jewellery excellence. Every Lukson creation is made in India with certified materials and delivered with an authenticity certificate in premium packaging.",
+    "fallback_body": "Discover timeless design and modern elegance with this handcrafted piece from the Lukson fine jewellery collection."
+  },
+  "search_terms": {
+    "max_bytes": 200,
+    "separator": " ",
+    "base_keywords": [
+      "lab grown diamond",
+      "gold jewellery",
+      "fine jewellery",
+      "certified diamond",
+      "hallmark gold",
+      "gift for her",
+      "wedding jewellery",
+      "engagement"
+    ],
+    "exclude_words": ["lukson", "amazon", "best", "cheap", "free"]
+  },
+  "validation": {
+    "required_fields": [
+      "item_sku",
+      "item_name",
+      "brand_name",
+      "feed_product_type",
+      "update_delete"
+    ],
+    "required_child_fields": ["standard_price", "quantity", "main_image_url"],
+    "image_url_pattern": "^https?://[^\\s]+\\.(?:jpg|jpeg|png|gif|webp)(?:\\?[^\\s]*)?$",
+    "sku_pattern": "^[A-Za-z0-9._\\-]{1,40}$",
+    "price_min": 1,
+    "price_max": 10000000
+  },
+  "variation": {
+    "themes": {
+      "ring size": "SizeName",
+      "size": "SizeName",
+      "metal purity": "MetalStamp",
+      "purity": "MetalStamp",
+      "metal": "MetalStamp",
+      "color": "ColorName",
+      "colour": "ColorName",
+      "finish": "ColorName",
+      "weight": "SizeName"
+    },
+    "combined_themes": {
+      "SizeName|MetalStamp": "SizeName-MetalStamp",
+      "SizeName|ColorName": "SizeName-ColorName",
+      "ColorName|MetalStamp": "ColorName-MetalStamp"
+    },
+    "relationship_type": "Variation",
+    "parent_sku_prefix": "P-",
+    "parent_fields_blanked": [
+      "standard_price",
+      "maximum_retail_price",
+      "quantity",
+      "external_product_id",
+      "external_product_id_type",
+      "fulfillment_latency"
+    ]
+  },
+  "purity_values": ["9K", "10K", "14K", "18K", "22K", "24K", "925 Sterling", "950 Platinum"],
+  "metafield_columns": {
+    "stone_type": ["Diamond Type (product.metafields.custom.diamond_type)", "Stone Type (product.metafields.custom.stone_type)"],
+    "stone_shape": ["Diamond Shape (product.metafields.custom.diamond_shape)", "Stone Shape (product.metafields.custom.stone_shape)"],
+    "stone_weight": ["Diamond Carat (product.metafields.custom.diamond_carat)", "Total Carat Weight (product.metafields.custom.total_carat_weight)"],
+    "stone_clarity": ["Diamond Clarity (product.metafields.custom.diamond_clarity)"],
+    "stone_color": ["Diamond Color (product.metafields.custom.diamond_color)"]
+  }
+}

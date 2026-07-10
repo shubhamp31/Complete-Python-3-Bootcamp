@@ -1,0 +1,197 @@
+"""Dynamic reader for Amazon flat-file (bulk listing) templates.
+
+Amazon templates change layout between category versions, so nothing here
+relies on fixed column numbers. The header row is located by searching for
+well-known field names (configurable via ``field_mapping.json``) and every
+column is addressed by its header text from then on.
+
+The workbook is always opened with ``keep_vba=True`` so macros, data
+validation, drop-downs, hidden sheets and protection survive a round trip.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from openpyxl import load_workbook
+from openpyxl.workbook.workbook import Workbook
+from openpyxl.worksheet.worksheet import Worksheet
+
+from core.utils import TemplateError, get_logger, normalise_header
+
+logger = get_logger("amazon_template")
+
+
+@dataclass
+class TemplateLayout:
+    """Resolved structure of the Amazon template's data sheet."""
+
+    sheet_name: str
+    header_row: int
+    data_start_row: int
+    #: normalised header -> 1-based column index
+    columns: dict[str, int] = field(default_factory=dict)
+    #: normalised header -> original header text (for reporting)
+    header_text: dict[str, str] = field(default_factory=dict)
+
+    def column_for(self, field_name: str) -> int | None:
+        """Return the 1-based column index for a field name, if present."""
+        return self.columns.get(normalise_header(field_name))
+
+    def has_field(self, field_name: str) -> bool:
+        """Whether the template exposes the given field."""
+        return normalise_header(field_name) in self.columns
+
+
+class AmazonTemplate:
+    """Loads an Amazon .xlsm/.xlsx template and resolves its layout."""
+
+    def __init__(
+        self,
+        path: Path | str,
+        sheet_name: str = "Template",
+        header_hints: list[str] | None = None,
+        header_search_max_rows: int = 10,
+    ) -> None:
+        self._path = Path(path)
+        self._sheet_name = sheet_name
+        self._header_hints = [
+            normalise_header(h) for h in (header_hints or ["item_sku", "feed_product_type"])
+        ]
+        self._max_scan_rows = header_search_max_rows
+        self._workbook: Workbook | None = None
+        self._layout: TemplateLayout | None = None
+
+    # ------------------------------------------------------------------ #
+
+    @property
+    def path(self) -> Path:
+        """Path of the template workbook on disk."""
+        return self._path
+
+    @property
+    def keep_vba(self) -> bool:
+        """Whether the workbook must be saved with macros preserved."""
+        return self._path.suffix.lower() == ".xlsm"
+
+    def load(self) -> Workbook:
+        """Open the workbook, preserving VBA when the file is an .xlsm.
+
+        Raises:
+            TemplateError: If the file cannot be opened as a workbook.
+        """
+        if self._workbook is not None:
+            return self._workbook
+        if not self._path.is_file():
+            raise TemplateError(f"Amazon template not found: {self._path}")
+        try:
+            self._workbook = load_workbook(
+                self._path, keep_vba=self.keep_vba, data_only=False
+            )
+        except Exception as exc:
+            raise TemplateError(
+                f"Could not open the Amazon template ({self._path.name}). "
+                f"Is it a valid Excel workbook? Details: {exc}"
+            ) from exc
+        logger.info(
+            "Loaded template %s (sheets: %s)",
+            self._path.name,
+            ", ".join(self._workbook.sheetnames),
+        )
+        return self._workbook
+
+    def layout(self) -> TemplateLayout:
+        """Resolve (and cache) sheet, header row and column positions.
+
+        Raises:
+            TemplateError: If no sheet contains a recognisable header row.
+        """
+        if self._layout is not None:
+            return self._layout
+
+        workbook = self.load()
+        sheet = self._locate_sheet(workbook)
+        header_row = self._locate_header_row(sheet)
+        columns: dict[str, int] = {}
+        header_text: dict[str, str] = {}
+        for cell in sheet[header_row]:
+            if cell.value is None or str(cell.value).strip() == "":
+                continue
+            key = normalise_header(str(cell.value))
+            if key and key not in columns:
+                columns[key] = cell.column
+                header_text[key] = str(cell.value).strip()
+
+        if not columns:
+            raise TemplateError(
+                f"No headers found on row {header_row} of sheet '{sheet.title}'."
+            )
+
+        self._layout = TemplateLayout(
+            sheet_name=sheet.title,
+            header_row=header_row,
+            data_start_row=header_row + 1,
+            columns=columns,
+            header_text=header_text,
+        )
+        logger.info(
+            "Template layout: sheet='%s', header row=%d, %d columns",
+            sheet.title,
+            header_row,
+            len(columns),
+        )
+        return self._layout
+
+    def worksheet(self) -> Worksheet:
+        """Return the resolved data worksheet."""
+        return self.load()[self.layout().sheet_name]
+
+    # ------------------------------------------------------------------ #
+
+    def _locate_sheet(self, workbook: Workbook) -> Worksheet:
+        """Find the data-entry sheet, preferring the configured name."""
+        for name in workbook.sheetnames:
+            if name.strip().lower() == self._sheet_name.strip().lower():
+                return workbook[name]
+        # Fall back to the first sheet that contains a header hint.
+        for name in workbook.sheetnames:
+            sheet = workbook[name]
+            if self._find_header_row(sheet) is not None:
+                logger.warning(
+                    "Sheet '%s' not found; using '%s' instead", self._sheet_name, name
+                )
+                return sheet
+        raise TemplateError(
+            f"Could not find a data sheet named '{self._sheet_name}' (or any sheet "
+            "containing known Amazon headers) in the template."
+        )
+
+    def _locate_header_row(self, sheet: Worksheet) -> int:
+        row = self._find_header_row(sheet)
+        if row is None:
+            raise TemplateError(
+                f"Could not locate the header row on sheet '{sheet.title}'. "
+                f"Expected one of: {', '.join(self._header_hints)}"
+            )
+        return row
+
+    def _find_header_row(self, sheet: Worksheet) -> int | None:
+        """Scan the top rows and return the one matching the most hints.
+
+        Amazon templates stack a version banner, a display-name row and the
+        machine field-name row; display names can coincide with field
+        aliases, so the single best-scoring row wins (ties go to the later
+        row, which is the one the data sits under).
+        """
+        best_row: int | None = None
+        best_score = 0
+        for row_idx, row in enumerate(
+            sheet.iter_rows(min_row=1, max_row=self._max_scan_rows, values_only=True),
+            start=1,
+        ):
+            normalised = {normalise_header(v) for v in row if v is not None}
+            score = sum(1 for hint in self._header_hints if hint in normalised)
+            if score >= best_score and score > 0:
+                best_row, best_score = row_idx, score
+        return best_row
