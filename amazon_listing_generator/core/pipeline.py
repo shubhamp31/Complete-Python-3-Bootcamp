@@ -179,17 +179,29 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             col("Type") + " " + col("Title") + " " + col("Tags")
         ).str.lower()
         default_cat = self._categories.get("default", {})
+        category_fields = sorted(
+            {
+                key
+                for cat in [default_cat, *self._categories.get("categories", [])]
+                for key in cat.get("amazon_fields", {})
+            }
+        )
         frame["_feed_product_type"] = default_cat.get("feed_product_type", "")
         frame["_product_type_label"] = default_cat.get("product_type_label", "")
         frame["_browse_node"] = default_cat.get("browse_node", "")
+        for field in category_fields:
+            frame[f"_cat_{field}"] = str(
+                default_cat.get("amazon_fields", {}).get(field, "")
+            )
         unmatched = pd.Series(True, index=frame.index)
         for category in self._categories.get("categories", []):
             keywords = [re.escape(k.lower()) for k in category.get("match_keywords", [])]
             if not keywords:
                 continue
-            mask = unmatched & haystack.str.contains(
-                "|".join(keywords), regex=True, na=False
-            )
+            # Word boundaries with optional plural so "ring" matches
+            # "Rings" but never the inside of "Earrings".
+            pattern = rf"\b(?:{'|'.join(keywords)})s?\b"
+            mask = unmatched & haystack.str.contains(pattern, regex=True, na=False)
             frame.loc[mask, "_feed_product_type"] = category.get(
                 "feed_product_type", ""
             )
@@ -197,6 +209,8 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
                 "product_type_label", ""
             )
             frame.loc[mask, "_browse_node"] = category.get("browse_node", "")
+            for field, value in category.get("amazon_fields", {}).items():
+                frame.loc[mask, f"_cat_{field}"] = str(value)
             unmatched &= ~mask
 
         # --- price / stock / weight ---------------------------------------
@@ -216,6 +230,24 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             pd.Series(frame["_weight"], index=frame.index)
             .map(lambda g: f"{g:g}" if pd.notna(g) else "")
         )
+        # Fallback: weight metafields (numeric, or configured range labels
+        # such as "2-5-g" mapped to representative values).
+        weight_cfg = self._rules.get("weight", {})
+        weight_map = {
+            str(k).lower(): str(v) for k, v in weight_cfg.get("value_map", {}).items()
+        }
+        for candidate in weight_cfg.get("metafield_columns", []):
+            if candidate not in frame.columns:
+                continue
+            raw = frame[candidate].astype(str).str.strip()
+            numeric = pd.to_numeric(raw, errors="coerce").map(
+                lambda g: f"{g:g}" if pd.notna(g) and g > 0 else ""
+            )
+            mapped = raw.str.lower().map(weight_map).fillna("")
+            fallback = numeric.mask(numeric == "", mapped)
+            frame["_weight"] = frame["_weight"].mask(
+                (frame["_weight"] == "") & (fallback != ""), fallback
+            )
 
         # --- barcode type ---------------------------------------------------
         barcode = col("Variant Barcode").str.replace(r"\D", "", regex=True)
@@ -225,10 +257,52 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             default="",
         )
 
-        # --- purity fallback from title/tags --------------------------------
+        # --- gold colour option: split "14K Yellow Gold" -------------------
+        # Shopify stores purity+colour together (e.g. "9K Rose Gold"); Amazon
+        # wants metal_stamp ("9K"), metal_type ("Rose Gold") and a colour that
+        # stays unique per variant (the full string).
+        if "_color" not in frame.columns:
+            frame["_color"] = ""
+        color = (
+            frame["_color"].astype(str).str.strip()
+            # Fix stray trailing digits from typos, e.g. "18K Yellow Gold1".
+            .str.replace(r"([A-Za-z])\d+$", r"\1", regex=True)
+            .str.strip()
+        )
+        karat = color.str.extract(r"^\s*(\d{1,2})\s*[Kk]?\b", expand=False).fillna("")
+        option_purity = np.where(karat != "", karat + "K", "")
+        metal_part = (
+            color.str.replace(r"^\s*\d{1,2}\s*[Kk]?(?:t|T)?\b", "", regex=True)
+            .str.strip()
+            .str.title()
+        )
+        frame["_metal_type"] = np.where(
+            metal_part != "", metal_part, str(self._defaults.get("metal_type", "Gold"))
+        )
+        frame["_color"] = np.where(
+            (option_purity != "") & (metal_part != ""),
+            pd.Series(option_purity, index=frame.index) + " " + metal_part,
+            color,
+        )
+
+        # --- purity: option value, then title/tags fallback -----------------
         if "_metal_stamp" not in frame.columns:
             frame["_metal_stamp"] = ""
-        blank = frame["_metal_stamp"].astype(str).str.strip() == ""
+        stamp = frame["_metal_stamp"].astype(str).str.strip()
+        # A raw "gold colour" value may have landed in metal stamp via the
+        # Option1 fallback; extract just the karat portion from it.
+        stamp_karat = stamp.str.extract(
+            r"^\s*(\d{1,2})\s*[Kk]?\b", expand=False
+        ).fillna("")
+        stamp = np.where(stamp_karat != "", stamp_karat + "K", stamp)
+        stamp = np.where(stamp == "", option_purity, stamp)
+        frame["_metal_stamp"] = pd.Series(stamp, index=frame.index)
+        is_parent = (
+            frame["_parentage"] == "parent"
+            if "_parentage" in frame.columns
+            else pd.Series(False, index=frame.index)
+        )
+        blank = (frame["_metal_stamp"] == "") & ~is_parent
         if blank.any():
             extracted = (
                 (col("Title") + " " + col("Tags"))
@@ -239,6 +313,40 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
                 extracted[blank] != "", extracted[blank] + "K", ""
             )
         frame["_metal_stamp"] = frame["_metal_stamp"].astype(str).str.upper().str.strip()
+        # Parents must not carry a specific purity - it varies per child.
+        frame.loc[is_parent & (frame["_variation_theme"] != ""), "_metal_stamp"] = ""
+
+        # --- ring size: "05 IND" -> "5" -------------------------------------
+        if "_ring_size" in frame.columns:
+            frame["_ring_size"] = (
+                frame["_ring_size"].astype(str)
+                .str.replace(r"(?i)\s*IND\.?\s*$", "", regex=True)
+                .str.strip()
+                .str.replace(r"^0+(\d)", r"\1", regex=True)
+            )
+
+        # --- parentage label for the template ("Parent"/"Child") ------------
+        frame["_parentage_label"] = (
+            frame["_parentage"].map({"parent": "Parent", "child": "Child"}).fillna("")
+            if "_parentage" in frame.columns
+            else ""
+        )
+
+        # --- occasion: metafield -> Amazon valid values ----------------------
+        occasion_cfg = self._rules.get("occasion", {})
+        frame["_occasion"] = ""
+        value_map = {
+            str(k).lower(): v for k, v in occasion_cfg.get("value_map", {}).items()
+        }
+        for candidate in occasion_cfg.get("columns", []):
+            if candidate not in frame.columns:
+                continue
+            mapped = (
+                frame[candidate].astype(str).str.strip().str.lower().map(value_map)
+            ).fillna("")
+            frame["_occasion"] = frame["_occasion"].mask(
+                (frame["_occasion"] == "") & (mapped != ""), mapped
+            )
 
         # --- diamond / stone details from metafields -------------------------
         for target, candidates in self._rules.get("metafield_columns", {}).items():
@@ -255,6 +363,8 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             frame["_stone_type"] = frame["_stone_type"].mask(
                 frame["_stone_type"] == "", str(self._defaults.get("stone_type", ""))
             )
+        if "_stone_shape" in frame.columns:
+            frame["_stone_shape"] = frame["_stone_shape"].astype(str).str.title()
         return frame
 
     def _blank_parent_fields(

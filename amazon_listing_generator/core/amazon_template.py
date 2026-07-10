@@ -1,9 +1,16 @@
 """Dynamic reader for Amazon flat-file (bulk listing) templates.
 
 Amazon templates change layout between category versions, so nothing here
-relies on fixed column numbers. The header row is located by searching for
-well-known field names (configurable via ``field_mapping.json``) and every
-column is addressed by its header text from then on.
+relies on fixed column numbers. Two template generations are supported:
+
+* Classic flat files - one header row of machine names (``item_sku`` ...),
+  located by scoring rows against known field names.
+* New "Category Listings" templates - these embed their own layout in a
+  hidden ``settings=`` cell on row 1 (``labelRow=4&attributeRow=5&dataRow=8``)
+  and use attribute-path headers such as
+  ``item_name[marketplace_id=...][language_tag=en_IN]#1.value``. The
+  marketplace/language qualifiers are stripped to produce stable simplified
+  aliases (``item_name#1.value``) that mappings can reference.
 
 The workbook is always opened with ``keep_vba=True`` so macros, data
 validation, drop-downs, hidden sheets and protection survive a round trip.
@@ -11,8 +18,10 @@ validation, drop-downs, hidden sheets and protection survive a round trip.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import parse_qs
 
 from openpyxl import load_workbook
 from openpyxl.workbook.workbook import Workbook
@@ -21,6 +30,22 @@ from openpyxl.worksheet.worksheet import Worksheet
 from core.utils import TemplateError, get_logger, normalise_header
 
 logger = get_logger("amazon_template")
+
+#: Bracket qualifiers that vary per marketplace/language and are dropped
+#: when building simplified header aliases. Others (e.g. ``[audience=ALL]``)
+#: are meaningful and kept.
+_DROPPED_QUALIFIERS = re.compile(
+    r"\[(?:marketplace_id|language_tag|content_language)=[^\]]*\]"
+)
+
+
+def simplify_attribute(header: str) -> str:
+    """Strip marketplace/language qualifiers from an attribute-path header.
+
+    ``item_name[marketplace_id=A21TJ...][language_tag=en_IN]#1.value``
+    becomes ``item_name#1.value``.
+    """
+    return _DROPPED_QUALIFIERS.sub("", str(header)).strip()
 
 
 @dataclass
@@ -112,16 +137,35 @@ class AmazonTemplate:
 
         workbook = self.load()
         sheet = self._locate_sheet(workbook)
-        header_row = self._locate_header_row(sheet)
+        embedded = self._read_embedded_settings(sheet)
+        if embedded:
+            header_row, data_start = embedded
+            logger.info(
+                "Template declares its own layout: attribute row=%d, data row=%d",
+                header_row,
+                data_start,
+            )
+        else:
+            header_row = self._locate_header_row(sheet)
+            data_start = header_row + 1
+
         columns: dict[str, int] = {}
         header_text: dict[str, str] = {}
+
+        def register(key: str, column: int, original: str) -> None:
+            key = normalise_header(key)
+            if key and key not in columns:
+                columns[key] = column
+                header_text[key] = original
+
         for cell in sheet[header_row]:
             if cell.value is None or str(cell.value).strip() == "":
                 continue
-            key = normalise_header(str(cell.value))
-            if key and key not in columns:
-                columns[key] = cell.column
-                header_text[key] = str(cell.value).strip()
+            original = str(cell.value).strip()
+            register(original, cell.column, original)
+            simplified = simplify_attribute(original)
+            if simplified != original:
+                register(simplified, cell.column, original)
 
         if not columns:
             raise TemplateError(
@@ -131,7 +175,7 @@ class AmazonTemplate:
         self._layout = TemplateLayout(
             sheet_name=sheet.title,
             header_row=header_row,
-            data_start_row=header_row + 1,
+            data_start_row=data_start,
             columns=columns,
             header_text=header_text,
         )
@@ -148,6 +192,28 @@ class AmazonTemplate:
         return self.load()[self.layout().sheet_name]
 
     # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _read_embedded_settings(sheet: Worksheet) -> tuple[int, int] | None:
+        """Parse the ``settings=...`` cell new-style templates embed on row 1.
+
+        Returns (attribute/header row, data start row) or ``None`` when the
+        template is a classic flat file without embedded settings.
+        """
+        for row in sheet.iter_rows(min_row=1, max_row=2, values_only=True):
+            for value in row:
+                if not isinstance(value, str) or "attributeRow=" not in value:
+                    continue
+                query = value.split("settings=", 1)[-1]
+                params = parse_qs(query)
+                try:
+                    attribute_row = int(params["attributeRow"][0])
+                    data_row = int(params["dataRow"][0])
+                except (KeyError, ValueError, IndexError):
+                    logger.warning("Could not parse embedded template settings")
+                    return None
+                return attribute_row, data_row
+        return None
 
     def _locate_sheet(self, workbook: Workbook) -> Worksheet:
         """Find the data-entry sheet, preferring the configured name."""

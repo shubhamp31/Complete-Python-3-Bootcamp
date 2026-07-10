@@ -70,14 +70,16 @@ def test_upload_file_contents(result_and_dir) -> None:
     assert any(str(s).startswith("P-AURORA") for s in skus)
     assert set(column("brand_name")) == {"Lukson"}
     assert set(column("country_of_origin")) == {"India"}
-    assert set(column("metal_type")) == {"Gold"}
-    assert set(column("stone_creation_method")) == {"Lab Grown"}
+    # Children carry the metal type; parents are blanked (it varies).
+    assert {v for v in column("metal_type") if v} == {"Gold"}
+    assert set(column("stone_creation_method")) == {"Lab-Created"}
 
     # Parent rows carry no price; children do.
     parentage = column("parent_child")
+    assert "Parent" in parentage and "Child" in parentage
     prices = column("standard_price")
     for p, price in zip(parentage, prices):
-        if p == "parent":
+        if p == "Parent":
             assert price is None
     titles = column("item_name")
     assert all(t and len(str(t)) <= 200 for t in titles)

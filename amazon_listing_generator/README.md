@@ -22,6 +22,13 @@ Shopify CSV ──► Read ──► Variations ──► Business Rules ──�
 - **Dynamic template handling** — Amazon template headers are located **by
   name**, never by column number. Macros, drop-downs, data validation,
   hidden sheets and protection are preserved (`openpyxl keep_vba`).
+  Both template generations are supported: classic flat files
+  (`item_sku`, `feed_product_type`, ...) and the new **Category Listings
+  Templates**, whose embedded `settings=` row (label/attribute/data row
+  positions) and attribute-path headers
+  (`item_name[marketplace_id=...][language_tag=en_IN]#1.value`) are parsed
+  automatically. Prefill/example rows in the data area are cleared before
+  writing.
 - **JSON-driven mapping engine** — every Shopify → Amazon mapping lives in
   `config/field_mapping.json`. New mappings need **zero code changes**.
 - **Variation builder** — automatic Parent/Child relationships for Ring

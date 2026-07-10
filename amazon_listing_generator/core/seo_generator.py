@@ -75,11 +75,15 @@ class SEOGenerator:
             return pd.Series([""] * len(frame), index=frame.index)
 
         brand = str(self._defaults.get("brand", ""))
-        metal_type = str(self._defaults.get("metal_type", "Gold"))
+        default_metal = str(self._defaults.get("metal_type", "Gold"))
         stone_method = str(self._defaults.get("stone_creation_method", "Lab Grown"))
         audience = str(self._title_rules.get("audience_default", "Women"))
+        strip_phrases = [
+            p for p in self._title_rules.get("strip_phrases", []) if p.strip()
+        ]
 
         purity = col("_metal_stamp")
+        metal_type = col("_metal_type").replace("", default_metal)
         stone_type = col("_stone_type").replace("", self._defaults.get("stone_type", "Diamond"))
         product_label = col("_product_type_label").replace("", "Jewellery")
         titles = col("Title")
@@ -91,27 +95,36 @@ class SEOGenerator:
 
         contexts: list[dict[str, str]] = []
         for i in frame.index:
-            stone_phrase = _MULTI_SPACE.sub(
-                " ", f"{stone_method} {stone_type[i]}"
-            ).strip()
+            # Avoid "Lab Grown Lab Grown Diamond" when the stone type
+            # already names the creation method.
+            if stone_method.lower() in stone_type[i].lower():
+                stone_phrase = stone_type[i]
+            else:
+                stone_phrase = _MULTI_SPACE.sub(
+                    " ", f"{stone_method} {stone_type[i]}"
+                ).strip()
+            name = titles[i]
+            for phrase in strip_phrases:
+                name = re.sub(re.escape(phrase), "", name, flags=re.IGNORECASE)
+            name = _MULTI_SPACE.sub(" ", name).replace(" - ", " ").strip(" -|")
             detail_bits = []
             if stone_weight[i]:
                 detail_bits.append(f"{stone_weight[i]} carat")
-            detail_bits.append(f"{stone_method} {stone_type[i]}".strip())
+            detail_bits.append(stone_phrase)
             if stone_clarity[i]:
                 detail_bits.append(f"({stone_clarity[i]} clarity)")
             contexts.append(
                 {
                     "brand": brand,
                     "purity": purity[i],
-                    "metal_type": metal_type,
+                    "metal_type": metal_type[i],
                     "stone_phrase": stone_phrase,
                     "stone_type": stone_type[i],
                     "stone_detail": " ".join(detail_bits),
                     "stone_creation_method": stone_method,
                     "product_type": product_label[i],
                     "product_type_lower": product_label[i].lower(),
-                    "product_title": titles[i],
+                    "product_title": name,
                     "collection_phrase": "",
                     "audience": audience,
                     "body": seo_desc[i] or bodies[i],

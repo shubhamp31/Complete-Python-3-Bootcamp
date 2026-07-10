@@ -8,6 +8,7 @@ performs that transformation with vectorized pandas operations.
 
 from __future__ import annotations
 
+import zlib
 from typing import Any
 
 import numpy as np
@@ -98,7 +99,7 @@ class VariationBuilder:
         )
         has_theme = is_multi & (frame["_variation_theme"] != "")
 
-        parent_skus = self._parent_prefix + frame["Handle"].map(slugify)
+        parent_skus = frame["Handle"].map(self._parent_sku_map(frame["Handle"]))
         frame.loc[has_theme, "_parentage"] = _CHILD
         frame.loc[has_theme, "_parent_sku"] = parent_skus[has_theme]
         frame.loc[has_theme, "_relationship_type"] = self._relationship_type
@@ -118,7 +119,13 @@ class VariationBuilder:
     # ------------------------------------------------------------------ #
 
     def _assign_skus(self, frame: pd.DataFrame) -> None:
-        """Use the Shopify variant SKU, generating one where missing."""
+        """Use the Shopify variant SKU, generating/deduplicating as needed.
+
+        Shopify allows the same SKU on multiple variants; Amazon does not.
+        Duplicates get a deterministic suffix built from the variant's
+        option values (e.g. ``-18KYG5`` for "18K Yellow Gold" size 5), so
+        the same input always produces the same output SKUs.
+        """
         sku = (
             frame["Variant SKU"].astype(str).str.strip()
             if "Variant SKU" in frame.columns
@@ -127,10 +134,82 @@ class VariationBuilder:
         missing = sku == ""
         if missing.any():
             suffix = frame.groupby("Handle", sort=False).cumcount().add(1).astype(str)
-            generated = frame["Handle"].map(slugify) + "-" + suffix
+            generated = frame["Handle"].map(lambda h: slugify(h, 34)) + "-" + suffix
             sku = sku.mask(missing, generated)
             logger.warning("Generated SKUs for %d variants without one", missing.sum())
-        frame["_sku"] = sku
+        frame["_sku"] = self._deduplicate_skus(frame, sku)
+
+    def _parent_sku_map(self, handles: pd.Series) -> dict[str, str]:
+        """Build a unique parent SKU per handle (max 40 chars).
+
+        Long handles can truncate to the same slug; collisions get a
+        deterministic CRC suffix so re-runs always produce the same SKUs.
+        """
+        max_slug = max(1, 40 - len(self._parent_prefix))
+        mapping: dict[str, str] = {}
+        owner: dict[str, str] = {}
+        for handle in pd.unique(handles):
+            sku = self._parent_prefix + slugify(handle, max_slug)
+            if owner.get(sku, handle) != handle:
+                code = format(zlib.crc32(str(handle).encode()) & 0xFFFF, "04X")
+                sku = f"{sku[: 40 - len(code) - 1]}-{code}"
+            owner.setdefault(sku, handle)
+            mapping[handle] = sku
+        return mapping
+
+    @staticmethod
+    def _option_code(value: str) -> str:
+        """Compress option text into a short SKU-safe code.
+
+        ``"18K Yellow Gold 5"`` -> ``"18KYG5"``.
+        """
+        parts = []
+        for token in str(value).split():
+            token = "".join(ch for ch in token if ch.isalnum())
+            if not token:
+                continue
+            parts.append(token.upper() if any(c.isdigit() for c in token) else token[0].upper())
+        return "".join(parts)[:12]
+
+    def _deduplicate_skus(self, frame: pd.DataFrame, sku: pd.Series) -> pd.Series:
+        """Make duplicated SKUs unique with option-derived suffixes."""
+        duplicated = (sku != "") & sku.duplicated(keep=False)
+        if not duplicated.any():
+            return sku
+
+        option_cols = [
+            c for c in ("Option1 Value", "Option2 Value", "Option3 Value")
+            if c in frame.columns
+        ]
+        combined = pd.Series("", index=frame.index)
+        for col in option_cols:
+            combined = combined + " " + frame[col].astype(str)
+        codes = combined.map(self._option_code)
+
+        adjusted = sku.copy()
+        for idx in sku.index[duplicated]:
+            code = codes[idx]
+            base = sku[idx]
+            if code:
+                base = f"{base[: 39 - len(code)]}-{code}"
+            adjusted[idx] = base
+
+        # Anything still colliding (identical options too) gets a counter.
+        still = (adjusted != "") & adjusted.duplicated(keep=False)
+        if still.any():
+            counter = adjusted.groupby(adjusted).cumcount()
+            needs_counter = still & (counter > 0)
+            adjusted[needs_counter] = (
+                adjusted[needs_counter].str.slice(0, 36)
+                + "-"
+                + (counter[needs_counter] + 1).astype(str)
+            )
+        logger.warning(
+            "Deduplicated %d variants sharing a SKU with other variants "
+            "(option-code suffixes appended)",
+            int(duplicated.sum()),
+        )
+        return adjusted
 
     def _map_option_attributes(self, frame: pd.DataFrame) -> None:
         """Copy ``_opt_*`` values into their Amazon attribute columns."""
@@ -200,7 +279,7 @@ class VariationBuilder:
         parents["_parent_sku"] = ""
         parents["_relationship_type"] = ""
         # Parents must not carry variant-specific attributes.
-        for col in ("_ring_size", "_weight_option"):
+        for col in ("_ring_size", "_weight_option", "_color", "_metal_stamp"):
             if col in parents.columns:
                 parents[col] = ""
         for col in parents.columns:

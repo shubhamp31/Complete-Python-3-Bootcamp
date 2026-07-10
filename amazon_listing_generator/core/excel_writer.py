@@ -84,6 +84,14 @@ class ExcelWriter:
             )
 
         start = layout.data_start_row
+        # New-style templates ship with example/prefill rows in the data
+        # area; clear them so stale values never mix with generated rows.
+        if sheet.max_row >= start:
+            for row in sheet.iter_rows(min_row=start, max_row=sheet.max_row):
+                for cell in row:
+                    if cell.value is not None:
+                        cell.value = None
+
         for offset, (_, record) in enumerate(amazon.iterrows()):
             row_idx = start + offset
             for field, col_idx in column_of.items():

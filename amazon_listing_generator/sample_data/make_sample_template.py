@@ -98,7 +98,7 @@ def build_template(path: Path) -> Path:
     parentage_col = next(
         i for i, (_, f) in enumerate(FIELDS, start=1) if f == "parent_child"
     )
-    dv = DataValidation(type="list", formula1='"parent,child"', allow_blank=True)
+    dv = DataValidation(type="list", formula1='"Parent,Child"', allow_blank=True)
     sheet.add_data_validation(dv)
     from openpyxl.utils import get_column_letter
 

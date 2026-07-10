@@ -39,12 +39,12 @@ def test_children_linked_to_their_parent(listings: pd.DataFrame) -> None:
 
 def test_combined_variation_theme(listings: pd.DataFrame) -> None:
     ring = listings[listings["Handle"] == "aurora-solitaire-ring"]
-    assert set(ring["_variation_theme"]) == {"SizeName-MetalStamp"}
+    assert set(ring["_variation_theme"]) == {"METAL_TYPE/RING_SIZE"}
 
 
 def test_single_option_theme(listings: pd.DataFrame) -> None:
     pendant = listings[listings["Handle"] == "celeste-pendant"]
-    assert set(pendant["_variation_theme"]) == {"MetalStamp"}
+    assert set(pendant["_variation_theme"]) == {"METAL_TYPE"}
 
 
 def test_standalone_products_have_no_parentage(listings: pd.DataFrame) -> None:

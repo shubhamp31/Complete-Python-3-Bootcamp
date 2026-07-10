@@ -5,6 +5,7 @@
     "audience_default": "Women",
     "stone_phrase_template": "{stone_creation_method} {stone_type}",
     "collection_prefix": "",
+    "strip_phrases": ["Pure Gold", "Lab Grown Diamond", "Lab-Grown Diamond", "Lab Diamond"],
     "banned_words": ["free", "cheap", "best seller", "hot item", "guarantee", "sale", "discount"]
   },
   "bullets": {
@@ -55,20 +56,36 @@
   },
   "variation": {
     "themes": {
-      "ring size": "SizeName",
-      "size": "SizeName",
-      "metal purity": "MetalStamp",
-      "purity": "MetalStamp",
-      "metal": "MetalStamp",
-      "color": "ColorName",
-      "colour": "ColorName",
-      "finish": "ColorName",
-      "weight": "SizeName"
+      "gold color": "COLOR",
+      "gold colour": "COLOR",
+      "color": "COLOR",
+      "colour": "COLOR",
+      "finish": "COLOR",
+      "ring size": "RING_SIZE",
+      "size": "SIZE",
+      "metal purity": "METAL_TYPE",
+      "purity": "METAL_TYPE",
+      "metal": "METAL_TYPE"
     },
     "combined_themes": {
-      "SizeName|MetalStamp": "SizeName-MetalStamp",
-      "SizeName|ColorName": "SizeName-ColorName",
-      "ColorName|MetalStamp": "ColorName-MetalStamp"
+      "COLOR|RING_SIZE": "COLOR/RING_SIZE",
+      "COLOR|SIZE": "COLOR/SIZE",
+      "METAL_TYPE|RING_SIZE": "METAL_TYPE/RING_SIZE",
+      "COLOR|METAL_TYPE": "COLOR/METAL_TYPE",
+      "COLOR|METAL_TYPE|RING_SIZE": "COLOR/METAL_TYPE/RING_SIZE"
+    },
+    "option_attributes": {
+      "gold color": "_color",
+      "gold colour": "_color",
+      "color": "_color",
+      "colour": "_color",
+      "finish": "_color",
+      "ring size": "_ring_size",
+      "size": "_ring_size",
+      "metal purity": "_metal_stamp",
+      "purity": "_metal_stamp",
+      "karat": "_metal_stamp",
+      "metal": "_metal_stamp"
     },
     "relationship_type": "Variation",
     "parent_sku_prefix": "P-",
@@ -78,13 +95,40 @@
       "quantity",
       "external_product_id",
       "external_product_id_type",
-      "fulfillment_latency"
+      "fulfillment_latency",
+      "ring_size",
+      "size_name",
+      "color_name",
+      "metal_stamp",
+      "metal_type"
     ]
+  },
+  "weight": {
+    "metafield_columns": ["Gram Weight (product.metafields.custom.gram_weight)"],
+    "value_map": {
+      "0-2-g": "1",
+      "2-5-g": "3.5",
+      "5-10-g": "7.5",
+      "10-20-g": "15"
+    }
+  },
+  "occasion": {
+    "columns": ["Occasion (product.metafields.custom.occasion)"],
+    "value_map": {
+      "engagement": "Engagement",
+      "anniversary": "Anniversary",
+      "birthday": "Birthday",
+      "wedding": "Wedding",
+      "diwali": "Diwali",
+      "christmas": "Christmas",
+      "valentine": "Valentine's Day",
+      "valentines-day": "Valentine's Day"
+    }
   },
   "purity_values": ["9K", "10K", "14K", "18K", "22K", "24K", "925 Sterling", "950 Platinum"],
   "metafield_columns": {
     "stone_type": ["Diamond Type (product.metafields.custom.diamond_type)", "Stone Type (product.metafields.custom.stone_type)"],
-    "stone_shape": ["Diamond Shape (product.metafields.custom.diamond_shape)", "Stone Shape (product.metafields.custom.stone_shape)"],
+    "stone_shape": ["Diamond Shape (product.metafields.custom.diamond_shape)", "Stone shape (product.metafields.shopify.stone-shape)", "Stone Shape (product.metafields.custom.stone_shape)"],
     "stone_weight": ["Diamond Carat (product.metafields.custom.diamond_carat)", "Total Carat Weight (product.metafields.custom.total_carat_weight)"],
     "stone_clarity": ["Diamond Clarity (product.metafields.custom.diamond_clarity)"],
     "stone_color": ["Diamond Color (product.metafields.custom.diamond_color)"]
