@@ -6,7 +6,6 @@
     "amazon_fields": {
       "item_type_name": "Rings",
       "unit_count": "1",
-      "is_resizable": "No",
       "hsn_entity": "HSN Code",
       "hsn_code": "710691"
     }
@@ -21,6 +20,7 @@
         "item_type_name": "Earrings",
         "unit_count": "2",
         "back_finding": "Screw Back",
+        "size": "Small",
         "hsn_entity": "HSN Code",
         "hsn_code": "71131144"
       }
@@ -33,7 +33,6 @@
       "amazon_fields": {
         "item_type_name": "Rings",
         "unit_count": "1",
-        "is_resizable": "No",
         "hsn_entity": "HSN Code",
         "hsn_code": "710691"
       }

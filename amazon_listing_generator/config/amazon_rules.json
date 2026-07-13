@@ -89,6 +89,7 @@
     },
     "relationship_type": "Variation",
     "parent_sku_prefix": "P-",
+    "sku_duplicate_strategy": "suffix",
     "parent_fields_blanked": [
       "standard_price",
       "maximum_retail_price",
@@ -102,6 +103,20 @@
       "metal_stamp",
       "metal_type"
     ]
+  },
+  "ring_size_fallback": "Adjustable",
+  "stone": {
+    "carat_range_columns": ["Carat Range (product.metafields.custom.carat_range)"],
+    "carat_value_map": {
+      "0-1-ct": "0.5",
+      "1-1-5-ct": "1",
+      "1-5-2-ct": "1.5",
+      "2-0-ct": "2"
+    },
+    "default_carat": "0.5",
+    "weight_unit": "Carats",
+    "total_weight_unit": "carats",
+    "default_color": "E-F"
   },
   "weight": {
     "metafield_columns": ["Gram Weight (product.metafields.custom.gram_weight)"],

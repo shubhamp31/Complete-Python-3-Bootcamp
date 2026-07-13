@@ -42,6 +42,13 @@ class VariationBuilder:
 
     def __init__(self, rules: dict[str, Any]) -> None:
         variation = rules.get("variation", {})
+        #: What to do when the Shopify export assigns one SKU to multiple
+        #: variants: "keep" (leave untouched; validation flags them),
+        #: "suffix" (append option-derived codes) or "drop" (keep the
+        #: first variant per SKU and discard the rest).
+        self._sku_duplicate_strategy: str = str(
+            variation.get("sku_duplicate_strategy", "keep")
+        ).lower()
         self._themes: dict[str, str] = {
             k.lower(): v for k, v in variation.get("themes", {}).items()
         }
@@ -82,6 +89,15 @@ class VariationBuilder:
 
         frame = variants.copy()
         self._assign_skus(frame)
+        if self._sku_duplicate_strategy == "drop":
+            duplicated = (frame["_sku"] != "") & frame["_sku"].duplicated(keep="first")
+            if duplicated.any():
+                logger.warning(
+                    "Dropping %d variants whose SKU repeats an earlier variant "
+                    "(sku_duplicate_strategy=drop)",
+                    int(duplicated.sum()),
+                )
+                frame = frame[~duplicated].reset_index(drop=True)
         self._map_option_attributes(frame)
 
         option_cols = [c for c in frame.columns if c.startswith("_opt_")]
@@ -137,7 +153,9 @@ class VariationBuilder:
             generated = frame["Handle"].map(lambda h: slugify(h, 34)) + "-" + suffix
             sku = sku.mask(missing, generated)
             logger.warning("Generated SKUs for %d variants without one", missing.sum())
-        frame["_sku"] = self._deduplicate_skus(frame, sku)
+        if self._sku_duplicate_strategy == "suffix":
+            sku = self._deduplicate_skus(frame, sku)
+        frame["_sku"] = sku
 
     def _parent_sku_map(self, handles: pd.Series) -> dict[str, str]:
         """Build a unique parent SKU per handle (max 40 chars).
@@ -172,7 +190,13 @@ class VariationBuilder:
         return "".join(parts)[:12]
 
     def _deduplicate_skus(self, frame: pd.DataFrame, sku: pd.Series) -> pd.Series:
-        """Make duplicated SKUs unique with option-derived suffixes."""
+        """Make duplicated SKUs unique with option-derived suffixes.
+
+        Only the option(s) that actually differ within a duplicate group
+        contribute to the suffix, so four gold colours sharing one SKU
+        become ``SKU-9KYG``, ``SKU-18KRG``, ... rather than repeating the
+        size that is already part of the SKU.
+        """
         duplicated = (sku != "") & sku.duplicated(keep=False)
         if not duplicated.any():
             return sku
@@ -181,18 +205,18 @@ class VariationBuilder:
             c for c in ("Option1 Value", "Option2 Value", "Option3 Value")
             if c in frame.columns
         ]
-        combined = pd.Series("", index=frame.index)
-        for col in option_cols:
-            combined = combined + " " + frame[col].astype(str)
-        codes = combined.map(self._option_code)
-
         adjusted = sku.copy()
-        for idx in sku.index[duplicated]:
-            code = codes[idx]
-            base = sku[idx]
-            if code:
-                base = f"{base[: 39 - len(code)]}-{code}"
-            adjusted[idx] = base
+        for _, indices in sku[duplicated].groupby(sku[duplicated]).groups.items():
+            block = frame.loc[indices, option_cols].astype(str)
+            distinguishing = [
+                c for c in option_cols if block[c].nunique() > 1
+            ] or option_cols
+            for idx in indices:
+                code = self._option_code(
+                    " ".join(str(frame.at[idx, c]) for c in distinguishing)
+                )
+                if code:
+                    adjusted[idx] = f"{sku[idx][: 39 - len(code)]}-{code}"
 
         # Anything still colliding (identical options too) gets a counter.
         still = (adjusted != "") & adjusted.duplicated(keep=False)

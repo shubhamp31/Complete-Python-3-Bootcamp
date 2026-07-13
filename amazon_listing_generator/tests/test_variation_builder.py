@@ -67,6 +67,46 @@ def test_metal_stamp_from_option(listings: pd.DataFrame) -> None:
     assert set(children["_metal_stamp"]) == {"14K", "18K"}
 
 
+def _dup_sku_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "Handle": ["x-ring"] * 3,
+            "Variant SKU": ["SKU-1", "SKU-1", "SKU-2"],
+            "Option1 Name": ["Gold Color"] * 3,
+            "Option1 Value": ["9K Yellow Gold", "18K Rose Gold", "18K White Gold"],
+            "_opt_gold color": ["9K Yellow Gold", "18K Rose Gold", "18K White Gold"],
+        }
+    )
+
+
+def _with_strategy(rules: dict, strategy: str) -> dict:
+    import copy
+
+    patched = copy.deepcopy(rules)
+    patched["variation"]["sku_duplicate_strategy"] = strategy
+    return patched
+
+
+def test_duplicate_skus_kept_by_default(rules: dict) -> None:
+    built = VariationBuilder(_with_strategy(rules, "keep")).build(_dup_sku_frame())
+    children = built[built["_parentage"] != "parent"]
+    assert children["_sku"].tolist() == ["SKU-1", "SKU-1", "SKU-2"]
+
+
+def test_duplicate_skus_suffixed(rules: dict) -> None:
+    built = VariationBuilder(_with_strategy(rules, "suffix")).build(_dup_sku_frame())
+    children = built[built["_parentage"] != "parent"]
+    assert children["_sku"].is_unique
+    assert "SKU-2" in set(children["_sku"])  # unique SKUs stay untouched
+    assert all(len(s) <= 40 for s in children["_sku"])
+
+
+def test_duplicate_skus_dropped(rules: dict) -> None:
+    built = VariationBuilder(_with_strategy(rules, "drop")).build(_dup_sku_frame())
+    children = built[built["_parentage"] != "parent"]
+    assert children["_sku"].tolist() == ["SKU-1", "SKU-2"]
+
+
 def test_missing_sku_generated(rules: dict) -> None:
     frame = pd.DataFrame(
         {

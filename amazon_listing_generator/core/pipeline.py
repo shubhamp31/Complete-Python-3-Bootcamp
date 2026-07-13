@@ -103,19 +103,33 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
         header_hints = self._mapping.header_row_hints + [
             rule.amazon_field for rule in mapper.rules
         ]
-        template = AmazonTemplate(
-            request.amazon_template,
-            sheet_name=self._mapping.template_sheet,
-            header_hints=header_hints,
-            header_search_max_rows=self._mapping.header_search_max_rows,
-        )
         writer = ExcelWriter()
-        output_file, skipped_fields = writer.write_upload_file(
-            template,
-            amazon,
-            mapper.rules,
-            request.output_dir / str(self._defaults.get("output_file_name")),
-        )
+        max_rows = int(self._defaults.get("max_rows_per_upload", 9500))
+        chunks = self._chunk_bounds(listings["Handle"], max_rows)
+        base_name = Path(str(self._defaults.get("output_file_name")))
+        output_files: list[Path] = []
+        skipped_fields: list[str] = []
+        for part, (start, end) in enumerate(chunks, start=1):
+            template = AmazonTemplate(
+                request.amazon_template,
+                sheet_name=self._mapping.template_sheet,
+                header_hints=header_hints,
+                header_search_max_rows=self._mapping.header_search_max_rows,
+            )
+            name = (
+                base_name.name
+                if len(chunks) == 1
+                else f"{base_name.stem} - Part {part}{base_name.suffix}"
+            )
+            path, skipped = writer.write_upload_file(
+                template,
+                amazon.iloc[start:end],
+                mapper.rules,
+                request.output_dir / name,
+            )
+            output_files.append(path)
+            skipped_fields = skipped
+        output_file = output_files[0]
 
         report(0.92, "Writing reports...")
         stats = self._build_stats(
@@ -145,9 +159,12 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
 
         report(1.0, "Done")
         status = "success" if stats.errors == 0 else "completed_with_errors"
+        parts_note = (
+            f" across {len(output_files)} upload files" if len(output_files) > 1 else ""
+        )
         message = (
             f"Generated {stats.total_listings} listings "
-            f"({stats.parents} parents, {stats.children} children) "
+            f"({stats.parents} parents, {stats.children} children){parts_note} "
             f"with {stats.errors} errors and {stats.warnings} warnings "
             f"in {stats.elapsed_seconds:.1f}s."
         )
@@ -155,6 +172,7 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
         return GenerationResult(
             status=status,
             output_file=output_file,
+            output_files=output_files,
             validation_report=validation_report,
             error_report=error_report,
             summary_report=summary_report,
@@ -365,6 +383,64 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             )
         if "_stone_shape" in frame.columns:
             frame["_stone_shape"] = frame["_stone_shape"].astype(str).str.title()
+
+        # --- stone carats / colour (required by the jewellery template) -----
+        stone_cfg = self._rules.get("stone", {})
+        carat_map = {
+            str(k).lower(): str(v)
+            for k, v in stone_cfg.get("carat_value_map", {}).items()
+        }
+        if "_stone_weight" not in frame.columns:
+            frame["_stone_weight"] = ""
+        for candidate in stone_cfg.get("carat_range_columns", []):
+            if candidate not in frame.columns:
+                continue
+            raw = frame[candidate].astype(str).str.strip()
+            numeric = pd.to_numeric(raw, errors="coerce").map(
+                lambda c: f"{c:g}" if pd.notna(c) and c > 0 else ""
+            )
+            mapped = raw.str.lower().map(carat_map).fillna("")
+            fallback = numeric.mask(numeric == "", mapped)
+            frame["_stone_weight"] = frame["_stone_weight"].mask(
+                (frame["_stone_weight"] == "") & (fallback != ""), fallback
+            )
+        default_carat = str(stone_cfg.get("default_carat", ""))
+        if default_carat:
+            frame["_stone_weight"] = frame["_stone_weight"].mask(
+                frame["_stone_weight"] == "", default_carat
+            )
+        frame["_stone_weight_unit"] = np.where(
+            frame["_stone_weight"] != "", str(stone_cfg.get("weight_unit", "Carats")), ""
+        )
+        frame["_total_diamond_weight_unit"] = np.where(
+            frame["_stone_weight"] != "",
+            str(stone_cfg.get("total_weight_unit", "carats")),
+            "",
+        )
+        if "_stone_color" not in frame.columns:
+            frame["_stone_color"] = ""
+        default_color = str(stone_cfg.get("default_color", ""))
+        if default_color:
+            frame["_stone_color"] = frame["_stone_color"].mask(
+                frame["_stone_color"] == "", default_color
+            )
+
+        # --- units only where a value exists ---------------------------------
+        frame["_weight_unit"] = np.where(
+            frame["_weight"] != "",
+            str(self._defaults.get("item_weight_unit_of_measure", "Grams")),
+            "",
+        )
+
+        # --- ring size fallback for rings sold without a size option ---------
+        ring_fallback = str(self._rules.get("ring_size_fallback", ""))
+        if ring_fallback and "_ring_size" in frame.columns:
+            needs_size = (
+                (frame["_feed_product_type"].astype(str).str.upper() == "RING")
+                & (frame["_parentage"] != "parent")
+                & (frame["_ring_size"] == "")
+            )
+            frame.loc[needs_size, "_ring_size"] = ring_fallback
         return frame
 
     def _blank_parent_fields(
@@ -377,6 +453,28 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             if field in amazon.columns:
                 amazon.loc[is_parent, field] = ""
         return amazon
+
+    @staticmethod
+    def _chunk_bounds(handles: pd.Series, max_rows: int) -> list[tuple[int, int]]:
+        """Split row positions into chunks of at most ``max_rows``.
+
+        Chunks only break between products (handles), so a parent and its
+        children always land in the same upload file. A single family
+        larger than ``max_rows`` still gets its own (oversized) chunk.
+        """
+        runs = handles.groupby((handles != handles.shift()).cumsum(), sort=False).size()
+        bounds: list[tuple[int, int]] = []
+        start = pos = 0
+        current = 0
+        for size in runs:
+            if current and current + size > max_rows:
+                bounds.append((start, pos))
+                start, current = pos, 0
+            current += int(size)
+            pos += int(size)
+        if current:
+            bounds.append((start, pos))
+        return bounds or [(0, 0)]
 
     @staticmethod
     def _build_stats(

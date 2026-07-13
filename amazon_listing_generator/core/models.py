@@ -122,6 +122,9 @@ class GenerationResult(BaseModel):
 
     status: Literal["success", "completed_with_errors", "failed"]
     output_file: Path | None = None
+    #: All upload files written (multiple when the listing count exceeds
+    #: the per-upload row limit and the output is split into parts).
+    output_files: list[Path] = Field(default_factory=list)
     validation_report: Path | None = None
     error_report: Path | None = None
     summary_report: Path | None = None
