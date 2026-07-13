@@ -38,6 +38,13 @@ logger = get_logger("pipeline")
 
 _PURITY_RE = re.compile(r"\b(9|10|14|18|22|24)\s*K(?:T|ARAT)?\b", re.IGNORECASE)
 
+#: Diamond carat mentions in free text ("1.162 ct", "0.5 carat"), excluding
+#: gold purity phrases such as "18 ct gold".
+_CARAT_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:ct|cts|carats?)\b(?!\s*(?:gold|yellow|white|rose))",
+    re.IGNORECASE,
+)
+
 
 @register
 class AmazonIndiaPipeline(MarketplaceGenerator):
@@ -392,6 +399,39 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
         }
         if "_stone_weight" not in frame.columns:
             frame["_stone_weight"] = ""
+        frame["_total_diamond_weight"] = ""
+        # Exact carats from product copy (SEO description, body HTML, ...):
+        # the first mention is the centre stone, the largest is the total.
+        text_cols = [
+            c for c in stone_cfg.get("carat_text_columns", []) if c in frame.columns
+        ]
+        if text_cols:
+            stone_by_handle: dict[str, str] = {}
+            total_by_handle: dict[str, str] = {}
+            products = frame.drop_duplicates("Handle")
+            for row in products[["Handle", *text_cols]].itertuples(index=False):
+                handle = row[0]
+                for text in row[1:]:
+                    values = [
+                        float(v)
+                        for v in _CARAT_RE.findall(str(text))
+                        if 0.05 <= float(v) <= 6
+                    ]
+                    if values:
+                        stone_by_handle[handle] = f"{values[0]:g}"
+                        total_by_handle[handle] = f"{max(values):g}"
+                        break
+            extracted = frame["Handle"].map(stone_by_handle).fillna("")
+            frame["_stone_weight"] = frame["_stone_weight"].mask(
+                (frame["_stone_weight"] == "") & (extracted != ""), extracted
+            )
+            frame["_total_diamond_weight"] = (
+                frame["Handle"].map(total_by_handle).fillna("")
+            )
+            logger.info(
+                "Extracted exact carats from product text for %d products",
+                len(stone_by_handle),
+            )
         for candidate in stone_cfg.get("carat_range_columns", []):
             if candidate not in frame.columns:
                 continue
@@ -409,11 +449,14 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             frame["_stone_weight"] = frame["_stone_weight"].mask(
                 frame["_stone_weight"] == "", default_carat
             )
+        frame["_total_diamond_weight"] = frame["_total_diamond_weight"].mask(
+            frame["_total_diamond_weight"] == "", frame["_stone_weight"]
+        )
         frame["_stone_weight_unit"] = np.where(
             frame["_stone_weight"] != "", str(stone_cfg.get("weight_unit", "Carats")), ""
         )
         frame["_total_diamond_weight_unit"] = np.where(
-            frame["_stone_weight"] != "",
+            frame["_total_diamond_weight"] != "",
             str(stone_cfg.get("total_weight_unit", "carats")),
             "",
         )

@@ -104,8 +104,14 @@
       "metal_type"
     ]
   },
-  "ring_size_fallback": "Adjustable",
+  "ring_size_fallback": "",
   "stone": {
+    "carat_text_columns": [
+      "SEO Description",
+      "product description (product.metafields.custom.product_description)",
+      "Body (HTML)",
+      "Title"
+    ],
     "carat_range_columns": ["Carat Range (product.metafields.custom.carat_range)"],
     "carat_value_map": {
       "0-1-ct": "0.5",

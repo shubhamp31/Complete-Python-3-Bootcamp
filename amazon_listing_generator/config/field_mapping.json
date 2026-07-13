@@ -45,7 +45,7 @@
     {"amazon_field": "stone_shape", "aliases": ["stone-shape", "stone#1.shape#1.value"], "source": {"type": "internal", "column": "_stone_shape"}},
     {"amazon_field": "stone_weight", "aliases": ["stone-weight", "stone#1.weight#1.value"], "source": {"type": "internal", "column": "_stone_weight"}},
     {"amazon_field": "stone_weight_unit", "aliases": ["stone#1.weight#1.unit"], "source": {"type": "internal", "column": "_stone_weight_unit"}},
-    {"amazon_field": "total_diamond_weight", "aliases": ["total_diamond_weight#1.value"], "source": {"type": "internal", "column": "_stone_weight"}},
+    {"amazon_field": "total_diamond_weight", "aliases": ["total_diamond_weight#1.value"], "source": {"type": "internal", "column": "_total_diamond_weight"}},
     {"amazon_field": "total_diamond_weight_unit", "aliases": ["total_diamond_weight#1.unit"], "source": {"type": "internal", "column": "_total_diamond_weight_unit"}},
     {"amazon_field": "stones_id", "aliases": ["stones#1.id"], "source": {"type": "constant", "value": "1"}},
     {"amazon_field": "stones_type", "aliases": ["stones#1.type.value"], "source": {"type": "constant", "value": "Diamond"}},
