@@ -82,8 +82,11 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
         report(0.02, "Reading Shopify export...")
         shopify = ShopifyReader(request.shopify_csv).read()
 
+        report(0.12, "Classifying products...")
+        variants = self._categorise(shopify.variants)
+
         report(0.15, "Building parent/child variations...")
-        listings = VariationBuilder(self._rules).build(shopify.variants)
+        listings = VariationBuilder(self._rules).build(variants)
 
         report(0.30, "Applying Lukson business rules...")
         listings = self._enrich(listings)
@@ -234,8 +237,10 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
 
     # ------------------------------------------------------------------ #
 
-    def _enrich(self, frame: pd.DataFrame) -> pd.DataFrame:
-        """Add computed business columns (vectorized)."""
+    def _categorise(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """Match products to categories: feed product type, browse node and
+        per-category Amazon field values. Runs before variation building so
+        the builder can apply per-product-type theme rules."""
         frame = frame.copy()
         n = len(frame)
 
@@ -244,7 +249,6 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
                 return frame[name].astype(str).str.strip()
             return pd.Series([""] * n, index=frame.index)
 
-        # --- category matching -------------------------------------------
         haystack = (
             col("Type") + " " + col("Title") + " " + col("Tags")
         ).str.lower()
@@ -282,6 +286,17 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             for field, value in category.get("amazon_fields", {}).items():
                 frame.loc[mask, f"_cat_{field}"] = str(value)
             unmatched &= ~mask
+        return frame
+
+    def _enrich(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """Add computed business columns (vectorized)."""
+        frame = frame.copy()
+        n = len(frame)
+
+        def col(name: str) -> pd.Series:
+            if name in frame.columns:
+                return frame[name].astype(str).str.strip()
+            return pd.Series([""] * n, index=frame.index)
 
         # --- price / stock / weight ---------------------------------------
         frame["_price"] = col("Variant Price")
@@ -384,7 +399,15 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             )
         frame["_metal_stamp"] = frame["_metal_stamp"].astype(str).str.upper().str.strip()
         # Parents must not carry a specific purity - it varies per child.
-        frame.loc[is_parent & (frame["_variation_theme"] != ""), "_metal_stamp"] = ""
+        # (Colour-split family parents keep theirs: one colour per parent.)
+        split = (
+            frame["_family_split"]
+            if "_family_split" in frame.columns
+            else pd.Series(False, index=frame.index)
+        )
+        frame.loc[
+            is_parent & (frame["_variation_theme"] != "") & ~split, "_metal_stamp"
+        ] = ""
 
         # --- ring size: "05 IND" -> "5" -------------------------------------
         if "_ring_size" in frame.columns:
@@ -524,7 +547,9 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
         ring_fallback = str(self._rules.get("ring_size_fallback", ""))
         if ring_fallback and "_ring_size" in frame.columns:
             needs_size = (
-                (frame["_feed_product_type"].astype(str).str.upper() == "RING")
+                frame["_feed_product_type"].astype(str).str.upper().isin(
+                    ("RING", "FINERING")
+                )
                 & (frame["_parentage"] != "parent")
                 & (frame["_ring_size"] == "")
             )
@@ -534,12 +559,23 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
     def _blank_parent_fields(
         self, amazon: pd.DataFrame, listings: pd.DataFrame
     ) -> pd.DataFrame:
-        """Parents must not carry sellable-only values (price, qty, ...)."""
+        """Parents must not carry sellable-only values (price, qty, ...).
+
+        Colour/purity fields stay on parents of colour-split families -
+        each of those parents represents exactly one colour.
+        """
         blanked = self._rules.get("variation", {}).get("parent_fields_blanked", [])
         is_parent = listings["_parentage"] == "parent"
+        split = (
+            listings["_family_split"]
+            if "_family_split" in listings.columns
+            else pd.Series(False, index=listings.index)
+        )
+        colour_fields = {"color_name", "metal_stamp", "metal_type"}
         for field in blanked:
             if field in amazon.columns:
-                amazon.loc[is_parent, field] = ""
+                mask = is_parent & ~split if field in colour_fields else is_parent
+                amazon.loc[mask, field] = ""
         return amazon
 
     @staticmethod

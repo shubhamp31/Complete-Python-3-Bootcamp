@@ -44,10 +44,13 @@ def test_stats_match_sample_data(result_and_dir) -> None:
     result, _ = result_and_dir
     stats = result.stats
     assert stats.total_products == 4
-    assert stats.parents == 2          # aurora ring + celeste pendant
+    # aurora ring is FINERING where METAL_TYPE/RING_SIZE is not an allowed
+    # theme -> it splits into one family per purity (2 parents), plus the
+    # celeste pendant family.
+    assert stats.parents == 3
     assert stats.children == 6         # 4 ring + 2 pendant variants
     assert stats.standalone == 2       # luna studs + nova bangle
-    assert stats.total_listings == 10
+    assert stats.total_listings == 11
     # nova-bangle has no image, no price, no SKU -> errors expected
     assert result.status == "completed_with_errors"
     assert stats.errors > 0

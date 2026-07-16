@@ -67,6 +67,13 @@ class VariationBuilder:
                 "option_attributes", DEFAULT_OPTION_ATTRIBUTES
             ).items()
         }
+        #: Per product type: the variation themes Amazon accepts. When a
+        #: product's combined theme (e.g. COLOR/RING_SIZE) is not allowed,
+        #: the family is split by one option so the remaining theme is.
+        self._allowed_themes: dict[str, set[str]] = {
+            pt.upper(): {t.upper() for t in themes}
+            for pt, themes in variation.get("allowed_themes", {}).items()
+        }
 
     # ------------------------------------------------------------------ #
 
@@ -103,21 +110,57 @@ class VariationBuilder:
         self._map_option_attributes(frame)
 
         option_cols = [c for c in frame.columns if c.startswith("_opt_")]
-        group_sizes = frame.groupby("Handle", sort=False)["Handle"].transform("size")
-        is_multi = group_sizes > 1
 
         frame["_variation_theme"] = ""
         frame["_parentage"] = ""
         frame["_parent_sku"] = ""
         frame["_relationship_type"] = ""
+        frame["_family"] = frame["Handle"].astype(str)
+        frame["_family_split"] = False
 
-        themes = self._themes_per_handle(frame, option_cols)
-        frame.loc[is_multi, "_variation_theme"] = (
-            frame.loc[is_multi, "Handle"].map(themes).fillna("")
+        theme_info = self._theme_info(frame, option_cols)
+        product_types: dict[str, str] = (
+            frame.groupby("Handle", sort=False)["_feed_product_type"].first().to_dict()
+            if "_feed_product_type" in frame.columns
+            else {}
         )
-        has_theme = is_multi & (frame["_variation_theme"] != "")
 
-        parent_skus = frame["Handle"].map(self._parent_sku_map(frame["Handle"]))
+        theme_by_handle: dict[str, str] = {}
+        for handle, parts in theme_info.items():
+            combined_name = self._combined_name([p for _, p in parts])
+            allowed = self._allowed_themes.get(
+                str(product_types.get(handle, "")).upper()
+            )
+            if allowed and combined_name.upper() not in allowed and len(parts) > 1:
+                for opt_col, part in parts:
+                    rest = self._combined_name(
+                        [q for oc, q in parts if oc != opt_col]
+                    )
+                    if rest.upper() in allowed:
+                        mask = frame["Handle"] == handle
+                        frame.loc[mask, "_family"] = (
+                            handle + "//" + frame.loc[mask, opt_col].astype(str)
+                        )
+                        frame.loc[mask, "_family_split"] = True
+                        logger.info(
+                            "Splitting '%s' into one family per '%s' value: "
+                            "theme %s is not allowed for %s, using %s",
+                            handle,
+                            opt_col.removeprefix("_opt_"),
+                            combined_name,
+                            product_types.get(handle, "?"),
+                            rest,
+                        )
+                        combined_name = rest
+                        break
+            theme_by_handle[handle] = combined_name
+
+        frame["_variation_theme"] = frame["Handle"].map(theme_by_handle).fillna("")
+        has_theme = frame["_variation_theme"] != ""
+
+        parent_skus = frame["_family"].map(
+            self._parent_sku_map(frame.loc[has_theme, "_family"])
+        )
         frame.loc[has_theme, "_parentage"] = _CHILD
         frame.loc[has_theme, "_parent_sku"] = parent_skus[has_theme]
         frame.loc[has_theme, "_relationship_type"] = self._relationship_type
@@ -161,22 +204,24 @@ class VariationBuilder:
             )
         frame["_sku"] = sku
 
-    def _parent_sku_map(self, handles: pd.Series) -> dict[str, str]:
-        """Build a unique parent SKU per handle (max 40 chars).
+    def _parent_sku_map(self, families: pd.Series) -> dict[str, str]:
+        """Build a unique parent SKU per variation family (max 40 chars).
 
-        Long handles can truncate to the same slug; collisions get a
-        deterministic CRC suffix so re-runs always produce the same SKUs.
+        A family id is either the handle or ``handle//option value`` when a
+        product was split per option. Long ids can truncate to the same
+        slug; collisions get a deterministic CRC suffix so re-runs always
+        produce the same SKUs.
         """
         max_slug = max(1, 40 - len(self._parent_prefix))
         mapping: dict[str, str] = {}
         owner: dict[str, str] = {}
-        for handle in pd.unique(handles):
-            sku = self._parent_prefix + slugify(handle, max_slug)
-            if owner.get(sku, handle) != handle:
-                code = format(zlib.crc32(str(handle).encode()) & 0xFFFF, "04X")
+        for family in pd.unique(families):
+            sku = self._parent_prefix + slugify(str(family).replace("//", "-"), max_slug)
+            if owner.get(sku, family) != family:
+                code = format(zlib.crc32(str(family).encode()) & 0xFFFF, "04X")
                 sku = f"{sku[: 40 - len(code) - 1]}-{code}"
-            owner.setdefault(sku, handle)
-            mapping[handle] = sku
+            owner.setdefault(sku, family)
+            mapping[family] = sku
         return mapping
 
     @staticmethod
@@ -292,35 +337,39 @@ class VariationBuilder:
                 frame["_metal_stamp"] == "", fallback
             )
 
-    def _themes_per_handle(
+    def _theme_info(
         self, frame: pd.DataFrame, option_cols: list[str]
-    ) -> dict[str, str]:
-        """Determine the Amazon variation theme for each multi-variant handle.
-
-        An option contributes to the theme when it actually varies within
-        the product and its name maps to a known Amazon theme part.
+    ) -> dict[str, list[tuple[str, str]]]:
+        """For each multi-variant handle: the varying (option column, theme
+        part) pairs. Options only count when they actually vary within the
+        product and their name maps to a known Amazon theme part.
         """
-        themes: dict[str, str] = {}
+        info: dict[str, list[tuple[str, str]]] = {}
         if not option_cols:
-            return themes
+            return info
         grouped = frame.groupby("Handle", sort=False)
         nunique = grouped[option_cols].nunique()
         sizes = grouped.size()
         for handle, counts in nunique.iterrows():
             if sizes[handle] <= 1:
                 continue
-            parts: list[str] = []
+            parts: list[tuple[str, str]] = []
             for col in option_cols:
                 if counts[col] <= 1:
                     continue
                 part = self._themes.get(col.removeprefix("_opt_"))
-                if part and part not in parts:
-                    parts.append(part)
-            if not parts:
-                continue
-            key = "|".join(sorted(parts))
-            themes[handle] = self._combined.get(key, "-".join(parts))
-        return themes
+                if part and all(p != part for _, p in parts):
+                    parts.append((col, part))
+            if parts:
+                info[handle] = parts
+        return info
+
+    def _combined_name(self, names: list[str]) -> str:
+        """Join theme parts into an Amazon theme name."""
+        if len(names) == 1:
+            return names[0]
+        key = "|".join(sorted(names))
+        return self._combined.get(key, "/".join(sorted(names)))
 
     def _build_parent_rows(self, children: pd.DataFrame) -> pd.DataFrame:
         """Synthesise one parent row per variation family.
@@ -331,15 +380,20 @@ class VariationBuilder:
         if children.empty:
             return children.iloc[0:0].copy()
 
-        parents = children.drop_duplicates(subset=["Handle"], keep="first").copy()
+        parents = children.drop_duplicates(subset=["_family"], keep="first").copy()
         parents["_sku"] = parents["_parent_sku"]
         parents["_parentage"] = _PARENT
         parents["_parent_sku"] = ""
         parents["_relationship_type"] = ""
-        # Parents must not carry variant-specific attributes.
-        for col in ("_ring_size", "_weight_option", "_color", "_metal_stamp"):
+        # Parents must not carry variant-specific attributes. Colour/purity
+        # stay on parents of families that were split per colour - each such
+        # parent represents exactly one colour.
+        for col in ("_ring_size", "_weight_option"):
             if col in parents.columns:
                 parents[col] = ""
+        for col in ("_color", "_metal_stamp"):
+            if col in parents.columns:
+                parents.loc[~parents["_family_split"], col] = ""
         for col in parents.columns:
             if col.startswith("_opt_"):
                 parents[col] = ""
@@ -352,8 +406,8 @@ class VariationBuilder:
     @staticmethod
     def _order_families(frame: pd.DataFrame) -> pd.DataFrame:
         """Order rows so each parent immediately precedes its children."""
-        handle_order = {h: i for i, h in enumerate(frame["Handle"].unique())}
-        rank = frame["Handle"].map(handle_order)
+        family_order = {f: i for i, f in enumerate(frame["_family"].unique())}
+        rank = frame["_family"].map(family_order)
         parent_last = np.where(frame["_parentage"] == _PARENT, 0, 1)
         frame = frame.assign(_h=rank, _p=parent_last)
         frame = frame.sort_values(["_h", "_p"], kind="stable").drop(columns=["_h", "_p"])

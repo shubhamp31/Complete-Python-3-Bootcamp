@@ -5,8 +5,21 @@
     "audience_default": "Women",
     "stone_phrase_template": "{stone_creation_method} {stone_type}",
     "collection_prefix": "",
-    "strip_phrases": ["Pure Gold", "Lab Grown Diamond", "Lab-Grown Diamond", "Lab Diamond"],
-    "banned_words": ["free", "cheap", "best seller", "hot item", "guarantee", "sale", "discount"]
+    "strip_phrases": [
+      "Pure Gold",
+      "Lab Grown Diamond",
+      "Lab-Grown Diamond",
+      "Lab Diamond"
+    ],
+    "banned_words": [
+      "free",
+      "cheap",
+      "best seller",
+      "hot item",
+      "guarantee",
+      "sale",
+      "discount"
+    ]
   },
   "bullets": {
     "count": 5,
@@ -38,7 +51,13 @@
       "wedding jewellery",
       "engagement"
     ],
-    "exclude_words": ["lukson", "amazon", "best", "cheap", "free"]
+    "exclude_words": [
+      "lukson",
+      "amazon",
+      "best",
+      "cheap",
+      "free"
+    ]
   },
   "validation": {
     "required_fields": [
@@ -48,7 +67,11 @@
       "feed_product_type",
       "update_delete"
     ],
-    "required_child_fields": ["standard_price", "quantity", "main_image_url"],
+    "required_child_fields": [
+      "standard_price",
+      "quantity",
+      "main_image_url"
+    ],
     "image_url_pattern": "^https?://[^\\s]+\\.(?:jpg|jpeg|png|gif|webp)(?:\\?[^\\s]*)?$",
     "sku_pattern": "^[A-Za-z0-9._\\-]{1,40}$",
     "price_min": 1,
@@ -102,7 +125,35 @@
       "color_name",
       "metal_stamp",
       "metal_type"
-    ]
+    ],
+    "allowed_themes": {
+      "FINERING": [
+        "COLOR",
+        "RING_SIZE",
+        "RING_SIZE/SIZE_PER_PEARL",
+        "SIZE",
+        "SIZE_PER_PEARL",
+        "STONE_SHAPE/RING_SIZE",
+        "TOTAL_DIAMOND_WEIGHT"
+      ],
+      "FINENECKLACEBRACELETANKLET": [
+        "COLOR",
+        "COLOR/ITEM_DISPLAY_LENGTH",
+        "ITEM_DISPLAY_DIAMETER",
+        "ITEM_DISPLAY_LENGTH",
+        "ITEM_DISPLAY_LENGTH/SIZE_PER_PEARL",
+        "ITEM_DISPLAY_LENGTH/TOTAL_DIAMOND_WEIGHT",
+        "ITEM_WEIGHT",
+        "METAL_STAMP",
+        "MODEL_NUMBER/SIZE",
+        "NUMBER_OF_ITEMS",
+        "SIZE",
+        "SIZE_PER_PEARL",
+        "SIZE/NUMBER_OF_ITEMS",
+        "TOTAL_DIAMOND_WEIGHT",
+        "TOTAL_GEM_WEIGHT"
+      ]
+    }
   },
   "ring_size_fallback": "",
   "stone": {
@@ -112,7 +163,9 @@
       "Body (HTML)",
       "Title"
     ],
-    "carat_range_columns": ["Carat Range (product.metafields.custom.carat_range)"],
+    "carat_range_columns": [
+      "Carat Range (product.metafields.custom.carat_range)"
+    ],
     "carat_value_map": {
       "0-1-ct": "0.5",
       "1-1-5-ct": "1",
@@ -125,7 +178,9 @@
     "default_color": "E-F"
   },
   "weight": {
-    "metafield_columns": ["Gram Weight (product.metafields.custom.gram_weight)"],
+    "metafield_columns": [
+      "Gram Weight (product.metafields.custom.gram_weight)"
+    ],
     "value_map": {
       "0-2-g": "1",
       "2-5-g": "3.5",
@@ -134,7 +189,9 @@
     }
   },
   "occasion": {
-    "columns": ["Occasion (product.metafields.custom.occasion)"],
+    "columns": [
+      "Occasion (product.metafields.custom.occasion)"
+    ],
     "value_map": {
       "engagement": "Engagement",
       "anniversary": "Anniversary",
@@ -146,12 +203,35 @@
       "valentines-day": "Valentine's Day"
     }
   },
-  "purity_values": ["9K", "10K", "14K", "18K", "22K", "24K", "925 Sterling", "950 Platinum"],
+  "purity_values": [
+    "9K",
+    "10K",
+    "14K",
+    "18K",
+    "22K",
+    "24K",
+    "925 Sterling",
+    "950 Platinum"
+  ],
   "metafield_columns": {
-    "stone_type": ["Diamond Type (product.metafields.custom.diamond_type)", "Stone Type (product.metafields.custom.stone_type)"],
-    "stone_shape": ["Diamond Shape (product.metafields.custom.diamond_shape)", "Stone shape (product.metafields.shopify.stone-shape)", "Stone Shape (product.metafields.custom.stone_shape)"],
-    "stone_weight": ["Diamond Carat (product.metafields.custom.diamond_carat)", "Total Carat Weight (product.metafields.custom.total_carat_weight)"],
-    "stone_clarity": ["Diamond Clarity (product.metafields.custom.diamond_clarity)"],
-    "stone_color": ["Diamond Color (product.metafields.custom.diamond_color)"]
+    "stone_type": [
+      "Diamond Type (product.metafields.custom.diamond_type)",
+      "Stone Type (product.metafields.custom.stone_type)"
+    ],
+    "stone_shape": [
+      "Diamond Shape (product.metafields.custom.diamond_shape)",
+      "Stone shape (product.metafields.shopify.stone-shape)",
+      "Stone Shape (product.metafields.custom.stone_shape)"
+    ],
+    "stone_weight": [
+      "Diamond Carat (product.metafields.custom.diamond_carat)",
+      "Total Carat Weight (product.metafields.custom.total_carat_weight)"
+    ],
+    "stone_clarity": [
+      "Diamond Clarity (product.metafields.custom.diamond_clarity)"
+    ],
+    "stone_color": [
+      "Diamond Color (product.metafields.custom.diamond_color)"
+    ]
   }
 }

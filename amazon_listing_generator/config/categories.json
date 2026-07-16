@@ -1,8 +1,8 @@
 {
   "default": {
-    "feed_product_type": "RING",
+    "feed_product_type": "FINERING",
     "product_type_label": "Ring",
-    "browse_node": "1378240031",
+    "browse_node": "2152522031",
     "amazon_fields": {
       "item_type_name": "Rings",
       "unit_count": "1",
@@ -12,7 +12,15 @@
   },
   "categories": [
     {
-      "match_keywords": ["earring", "stud", "hoop", "huggie", "jhumka", "jhumki", "ear cuff"],
+      "match_keywords": [
+        "earring",
+        "stud",
+        "hoop",
+        "huggie",
+        "jhumka",
+        "jhumki",
+        "ear cuff"
+      ],
       "feed_product_type": "EARRING",
       "product_type_label": "Earrings",
       "browse_node": "7124380031",
@@ -26,22 +34,33 @@
       }
     },
     {
-      "match_keywords": ["pendant", "necklace", "mangalsutra", "choker", "chain"],
+      "match_keywords": [
+        "pendant",
+        "necklace",
+        "mangalsutra",
+        "choker",
+        "chain"
+      ],
       "feed_product_type": "NECKLACE",
       "product_type_label": "Pendant Necklace",
-      "browse_node": "",
+      "browse_node": "2152564031",
       "amazon_fields": {
-        "item_type_name": "Pendant Necklaces",
+        "item_type_name": "Necklaces",
         "unit_count": "1",
         "hsn_entity": "HSN Code",
         "hsn_code": "71131144"
       }
     },
     {
-      "match_keywords": ["bracelet", "bangle", "kada", "cuff"],
-      "feed_product_type": "BRACELET",
+      "match_keywords": [
+        "bracelet",
+        "bangle",
+        "kada",
+        "cuff"
+      ],
+      "feed_product_type": "FINENECKLACEBRACELETANKLET",
       "product_type_label": "Bracelet",
-      "browse_node": "",
+      "browse_node": "2152523031",
       "amazon_fields": {
         "item_type_name": "Bracelets",
         "unit_count": "1",
@@ -50,10 +69,14 @@
       }
     },
     {
-      "match_keywords": ["ring", "band", "solitaire"],
-      "feed_product_type": "RING",
+      "match_keywords": [
+        "ring",
+        "band",
+        "solitaire"
+      ],
+      "feed_product_type": "FINERING",
       "product_type_label": "Ring",
-      "browse_node": "1378240031",
+      "browse_node": "2152522031",
       "amazon_fields": {
         "item_type_name": "Rings",
         "unit_count": "1",
