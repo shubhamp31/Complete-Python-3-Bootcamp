@@ -89,7 +89,7 @@
     },
     "relationship_type": "Variation",
     "parent_sku_prefix": "P-",
-    "sku_duplicate_strategy": "suffix",
+    "sku_duplicate_strategy": "suffix_others",
     "parent_fields_blanked": [
       "standard_price",
       "maximum_retail_price",

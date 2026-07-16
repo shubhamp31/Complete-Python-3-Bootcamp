@@ -101,6 +101,18 @@ def test_duplicate_skus_suffixed(rules: dict) -> None:
     assert all(len(s) <= 40 for s in children["_sku"])
 
 
+def test_duplicate_skus_suffix_others_keeps_first(rules: dict) -> None:
+    built = VariationBuilder(_with_strategy(rules, "suffix_others")).build(
+        _dup_sku_frame()
+    )
+    children = built[built["_parentage"] != "parent"]
+    skus = children["_sku"].tolist()
+    assert skus[0] == "SKU-1"          # first duplicate keeps the original
+    assert skus[1].startswith("SKU-1-")  # second gets the colour suffix
+    assert skus[2] == "SKU-2"          # unique SKUs never change
+    assert children["_sku"].is_unique
+
+
 def test_duplicate_skus_dropped(rules: dict) -> None:
     built = VariationBuilder(_with_strategy(rules, "drop")).build(_dup_sku_frame())
     children = built[built["_parentage"] != "parent"]

@@ -43,11 +43,13 @@ class VariationBuilder:
     def __init__(self, rules: dict[str, Any]) -> None:
         variation = rules.get("variation", {})
         #: What to do when the Shopify export assigns one SKU to multiple
-        #: variants: "keep" (leave untouched; validation flags them),
-        #: "suffix" (append option-derived codes) or "drop" (keep the
-        #: first variant per SKU and discard the rest).
+        #: variants: "suffix_others" (first variant keeps the original SKU,
+        #: the rest get option-derived suffixes), "suffix" (every variant in
+        #: a duplicate group gets a suffix), "keep" (leave untouched;
+        #: validation flags them) or "drop" (keep the first variant per SKU
+        #: and discard the rest).
         self._sku_duplicate_strategy: str = str(
-            variation.get("sku_duplicate_strategy", "keep")
+            variation.get("sku_duplicate_strategy", "suffix_others")
         ).lower()
         self._themes: dict[str, str] = {
             k.lower(): v for k, v in variation.get("themes", {}).items()
@@ -153,8 +155,10 @@ class VariationBuilder:
             generated = frame["Handle"].map(lambda h: slugify(h, 34)) + "-" + suffix
             sku = sku.mask(missing, generated)
             logger.warning("Generated SKUs for %d variants without one", missing.sum())
-        if self._sku_duplicate_strategy == "suffix":
-            sku = self._deduplicate_skus(frame, sku)
+        if self._sku_duplicate_strategy in ("suffix", "suffix_others"):
+            sku = self._deduplicate_skus(
+                frame, sku, keep_first=self._sku_duplicate_strategy == "suffix_others"
+            )
         frame["_sku"] = sku
 
     def _parent_sku_map(self, handles: pd.Series) -> dict[str, str]:
@@ -189,13 +193,17 @@ class VariationBuilder:
             parts.append(token.upper() if any(c.isdigit() for c in token) else token[0].upper())
         return "".join(parts)[:12]
 
-    def _deduplicate_skus(self, frame: pd.DataFrame, sku: pd.Series) -> pd.Series:
+    def _deduplicate_skus(
+        self, frame: pd.DataFrame, sku: pd.Series, keep_first: bool = False
+    ) -> pd.Series:
         """Make duplicated SKUs unique with option-derived suffixes.
 
         Only the option(s) that actually differ within a duplicate group
         contribute to the suffix, so four gold colours sharing one SKU
         become ``SKU-9KYG``, ``SKU-18KRG``, ... rather than repeating the
-        size that is already part of the SKU.
+        size that is already part of the SKU. With ``keep_first`` the first
+        variant of each group keeps the original SKU untouched and only
+        the remaining duplicates are suffixed.
         """
         duplicated = (sku != "") & sku.duplicated(keep=False)
         if not duplicated.any():
@@ -211,7 +219,9 @@ class VariationBuilder:
             distinguishing = [
                 c for c in option_cols if block[c].nunique() > 1
             ] or option_cols
-            for idx in indices:
+            for position, idx in enumerate(indices):
+                if keep_first and position == 0:
+                    continue
                 code = self._option_code(
                     " ".join(str(frame.at[idx, c]) for c in distinguishing)
                 )
@@ -229,9 +239,11 @@ class VariationBuilder:
                 + (counter[needs_counter] + 1).astype(str)
             )
         logger.warning(
-            "Deduplicated %d variants sharing a SKU with other variants "
-            "(option-code suffixes appended)",
+            "SKU deduplication: %d of %d duplicate-SKU variants renamed with "
+            "option-code suffixes (%d kept their original SKU)",
+            int((adjusted != sku).sum()),
             int(duplicated.sum()),
+            int((adjusted[duplicated] == sku[duplicated]).sum()),
         )
         return adjusted
 
