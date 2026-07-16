@@ -180,17 +180,23 @@ class VariationBuilder:
         return mapping
 
     @staticmethod
-    def _option_code(value: str) -> str:
+    def _option_code(value: str, letters_only: bool = False) -> str:
         """Compress option text into a short SKU-safe code.
 
-        ``"18K Yellow Gold 5"`` -> ``"18KYG5"``.
+        ``"18K Yellow Gold"`` -> ``"18KYG"``; with ``letters_only`` the
+        digit tokens are dropped (``"YG"``) - useful when the SKU already
+        encodes karat and size and only the colour needs differentiating.
         """
         parts = []
         for token in str(value).split():
             token = "".join(ch for ch in token if ch.isalnum())
             if not token:
                 continue
-            parts.append(token.upper() if any(c.isdigit() for c in token) else token[0].upper())
+            if any(c.isdigit() for c in token):
+                if not letters_only:
+                    parts.append(token.upper())
+            else:
+                parts.append(token[0].upper())
         return "".join(parts)[:12]
 
     def _deduplicate_skus(
@@ -219,14 +225,30 @@ class VariationBuilder:
             distinguishing = [
                 c for c in option_cols if block[c].nunique() > 1
             ] or option_cols
+
+            def suffixed(idx: int, letters_only: bool) -> str:
+                code = self._option_code(
+                    " ".join(str(frame.at[idx, c]) for c in distinguishing),
+                    letters_only=letters_only,
+                )
+                return f"{sku[idx][: 39 - len(code)]}-{code}" if code else sku[idx]
+
+            # Prefer the short colour-only code ("-YG"); karat and size are
+            # usually already inside the SKU. Fall back to the full code
+            # for rows the short one cannot disambiguate.
+            group_new: dict[int, str] = {}
             for position, idx in enumerate(indices):
                 if keep_first and position == 0:
+                    group_new[idx] = sku[idx]
                     continue
-                code = self._option_code(
-                    " ".join(str(frame.at[idx, c]) for c in distinguishing)
-                )
-                if code:
-                    adjusted[idx] = f"{sku[idx][: 39 - len(code)]}-{code}"
+                group_new[idx] = suffixed(idx, letters_only=True)
+            seen_counts = pd.Series(list(group_new.values())).value_counts()
+            for idx, candidate in group_new.items():
+                if seen_counts[candidate] > 1 and not (
+                    keep_first and idx == indices[0]
+                ):
+                    group_new[idx] = suffixed(idx, letters_only=False)
+            adjusted[list(group_new)] = list(group_new.values())
 
         # Anything still colliding (identical options too) gets a counter.
         still = (adjusted != "") & adjusted.duplicated(keep=False)
