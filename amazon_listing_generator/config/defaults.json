@@ -37,5 +37,9 @@
   "validation_report_name": "Validation Report.xlsx",
   "error_report_name": "Error Report.xlsx",
   "summary_report_name": "Summary Report.xlsx",
-  "jewelry_material_categorization": "Fine"
+  "jewelry_material_categorization": "Fine",
+  "excluded_handles": [
+    "tri-shine-pure-gold-lab-diamond-pendant",
+    "tri-shine-pure-gold-lab-diamond-stud-earrings"
+  ]
 }

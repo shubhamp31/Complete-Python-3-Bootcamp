@@ -82,8 +82,27 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
         report(0.02, "Reading Shopify export...")
         shopify = ShopifyReader(request.shopify_csv).read()
 
+        # Products explicitly excluded via configuration (e.g. flagged by an
+        # Amazon processing report and awaiting a fix in Shopify).
+        excluded_handles = {
+            str(h).strip().lower()
+            for h in self._defaults.get("excluded_handles", [])
+            if str(h).strip()
+        }
+        variants = shopify.variants
+        if excluded_handles:
+            drop = variants["Handle"].astype(str).str.lower().isin(excluded_handles)
+            if drop.any():
+                logger.warning(
+                    "Excluding %d configured product(s) (%d variants): %s",
+                    variants.loc[drop, "Handle"].nunique(),
+                    int(drop.sum()),
+                    ", ".join(sorted(variants.loc[drop, "Handle"].unique())),
+                )
+                variants = variants[~drop].reset_index(drop=True)
+
         report(0.12, "Classifying products...")
-        variants = self._categorise(shopify.variants)
+        variants = self._categorise(variants)
 
         report(0.15, "Building parent/child variations...")
         listings = VariationBuilder(self._rules).build(variants)
