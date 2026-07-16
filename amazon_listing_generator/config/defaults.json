@@ -36,5 +36,6 @@
   "output_file_name": "Amazon Upload File.xlsm",
   "validation_report_name": "Validation Report.xlsx",
   "error_report_name": "Error Report.xlsx",
-  "summary_report_name": "Summary Report.xlsx"
+  "summary_report_name": "Summary Report.xlsx",
+  "jewelry_material_categorization": "Fine"
 }

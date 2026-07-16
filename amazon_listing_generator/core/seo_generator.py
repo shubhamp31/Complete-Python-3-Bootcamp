@@ -157,6 +157,10 @@ class SEOGenerator:
         rendered = self._safe_format(
             template, {**ctx, "title": self._render_title(ctx), "body": body}
         )
+        # Amazon rejects descriptions containing policy phrases such as
+        # "free returns" - strip any configured banned phrase.
+        for phrase in self._description_rules.get("banned_phrases", []):
+            rendered = re.sub(re.escape(phrase), "", rendered, flags=re.IGNORECASE)
         return truncate_at_word(_MULTI_SPACE.sub(" ", rendered).strip(), max_len)
 
     def _render_search_terms(self, ctx: dict[str, str]) -> str:

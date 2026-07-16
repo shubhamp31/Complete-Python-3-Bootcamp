@@ -333,6 +333,11 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             frame["_weight"] = frame["_weight"].mask(
                 (frame["_weight"] == "") & (fallback != ""), fallback
             )
+        default_weight = str(weight_cfg.get("default_value", ""))
+        if default_weight:
+            frame["_weight"] = frame["_weight"].mask(
+                frame["_weight"] == "", default_weight
+            )
 
         # --- barcode type ---------------------------------------------------
         barcode = col("Variant Barcode").str.replace(r"\D", "", regex=True)
@@ -458,6 +463,11 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             )
         if "_stone_shape" in frame.columns:
             frame["_stone_shape"] = frame["_stone_shape"].astype(str).str.title()
+        default_shape = str(self._rules.get("stone", {}).get("default_shape", ""))
+        if default_shape and "_stone_shape" in frame.columns:
+            frame["_stone_shape"] = frame["_stone_shape"].mask(
+                frame["_stone_shape"] == "", default_shape
+            )
 
         # --- stone carats / colour (required by the jewellery template) -----
         stone_cfg = self._rules.get("stone", {})

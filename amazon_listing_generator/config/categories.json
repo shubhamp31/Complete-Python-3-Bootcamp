@@ -7,7 +7,9 @@
       "item_type_name": "Rings",
       "unit_count": "1",
       "hsn_entity": "HSN Code",
-      "hsn_code": "710691"
+      "hsn_code": "710691",
+      "material": "Precious Metal",
+      "is_resizable": "No"
     }
   },
   "categories": [
@@ -30,7 +32,9 @@
         "back_finding": "Screw Back",
         "size": "Small",
         "hsn_entity": "HSN Code",
-        "hsn_code": "71131144"
+        "hsn_code": "71131144",
+        "material": "Metal",
+        "is_resizable": ""
       }
     },
     {
@@ -48,7 +52,11 @@
         "item_type_name": "Necklaces",
         "unit_count": "1",
         "hsn_entity": "HSN Code",
-        "hsn_code": "71131144"
+        "hsn_code": "71131144",
+        "material": "Metal",
+        "size": "One Size",
+        "clasp_type": "Spring Ring",
+        "is_resizable": ""
       }
     },
     {
@@ -65,7 +73,11 @@
         "item_type_name": "Bracelets",
         "unit_count": "1",
         "hsn_entity": "HSN Code",
-        "hsn_code": "71131144"
+        "hsn_code": "71131144",
+        "material": "Precious Metal",
+        "size": "One Size",
+        "item_shape": "Round",
+        "is_resizable": ""
       }
     },
     {
@@ -81,7 +93,9 @@
         "item_type_name": "Rings",
         "unit_count": "1",
         "hsn_entity": "HSN Code",
-        "hsn_code": "710691"
+        "hsn_code": "710691",
+        "material": "Precious Metal",
+        "is_resizable": "No"
       }
     }
   ]

@@ -36,7 +36,15 @@
     "max_length": 2000,
     "strip_html": true,
     "template": "{title}. {body} Crafted in {purity} {metal_type} with {stone_phrase}, this piece reflects Lukson's commitment to fine jewellery excellence. Every Lukson creation is made in India with certified materials and delivered with an authenticity certificate in premium packaging.",
-    "fallback_body": "Discover timeless design and modern elegance with this handcrafted piece from the Lukson fine jewellery collection."
+    "fallback_body": "Discover timeless design and modern elegance with this handcrafted piece from the Lukson fine jewellery collection.",
+    "banned_phrases": [
+      "free returns",
+      "free shipping",
+      "free delivery",
+      "cash on delivery",
+      "money back guarantee",
+      "money-back guarantee"
+    ]
   },
   "search_terms": {
     "max_bytes": 200,
@@ -124,7 +132,8 @@
       "size_name",
       "color_name",
       "metal_stamp",
-      "metal_type"
+      "metal_type",
+      "fulfillment_channel_code"
     ],
     "allowed_themes": {
       "FINERING": [
@@ -175,7 +184,8 @@
     "default_carat": "0.5",
     "weight_unit": "Carats",
     "total_weight_unit": "carats",
-    "default_color": "E-F"
+    "default_color": "E-F",
+    "default_shape": "Round"
   },
   "weight": {
     "metafield_columns": [
@@ -186,7 +196,8 @@
       "2-5-g": "3.5",
       "5-10-g": "7.5",
       "10-20-g": "15"
-    }
+    },
+    "default_value": "3.5"
   },
   "occasion": {
     "columns": [
