@@ -18,6 +18,7 @@ validation, drop-downs, hidden sheets and protection survive a round trip.
 
 from __future__ import annotations
 
+import base64
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -192,6 +193,26 @@ class AmazonTemplate:
         return self.load()[self.layout().sheet_name]
 
     # ------------------------------------------------------------------ #
+
+    def supported_product_types(self) -> list[str]:
+        """Product types the template was generated for (new format only).
+
+        New-style templates embed ``ptds=<base64 "EARRING,RING">`` in their
+        settings row. Returns an empty list when the template does not
+        declare them (classic flat files).
+        """
+        sheet = self.worksheet()
+        for row in sheet.iter_rows(min_row=1, max_row=2, values_only=True):
+            for value in row:
+                if not isinstance(value, str) or "ptds=" not in value:
+                    continue
+                params = parse_qs(value.split("settings=", 1)[-1])
+                try:
+                    decoded = base64.b64decode(params["ptds"][0]).decode("utf-8")
+                except (KeyError, ValueError, IndexError):
+                    return []
+                return [p.strip().upper() for p in decoded.split(",") if p.strip()]
+        return []
 
     @staticmethod
     def _read_embedded_settings(sheet: Worksheet) -> tuple[int, int] | None:

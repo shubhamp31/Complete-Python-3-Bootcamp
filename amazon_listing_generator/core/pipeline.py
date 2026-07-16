@@ -98,11 +98,55 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
 
         report(0.62, "Mapping fields to the Amazon template...")
         mapper = FieldMapper(self._mapping, self._defaults)
+
+        # The template declares which product types it supports; products
+        # outside that list would be rejected by Amazon, so they are set
+        # aside and reported instead of being written with a wrong type.
+        supported = AmazonTemplate(
+            request.amazon_template,
+            sheet_name=self._mapping.template_sheet,
+            header_hints=self._mapping.header_row_hints,
+            header_search_max_rows=self._mapping.header_search_max_rows,
+        ).supported_product_types()
+        excluded_issues = pd.DataFrame(columns=["Row", "SKU", "Field", "Severity", "Message"])
+        excluded_count = 0
+        if supported:
+            unsupported = ~listings["_feed_product_type"].astype(str).str.upper().isin(
+                supported
+            )
+            excluded_count = int(unsupported.sum())
+            if excluded_count:
+                excluded = listings[unsupported]
+                logger.warning(
+                    "Excluding %d listings whose product type is not in the "
+                    "template (%s); affected types: %s",
+                    excluded_count,
+                    ", ".join(supported),
+                    ", ".join(sorted(excluded["_feed_product_type"].unique())),
+                )
+                excluded_issues = pd.DataFrame(
+                    {
+                        "Row": 0,
+                        "SKU": excluded["_sku"].to_numpy(),
+                        "Field": "feed_product_type",
+                        "Severity": "Warning",
+                        "Message": (
+                            "Product type '"
+                            + excluded["_feed_product_type"].astype(str)
+                            + "' is not included in this Amazon template "
+                            f"(supports: {', '.join(supported)}) - download a "
+                            "template that covers it and regenerate"
+                        ),
+                    }
+                )
+                listings = listings[~unsupported].reset_index(drop=True)
+
         amazon = mapper.map(listings)
         amazon = self._blank_parent_fields(amazon, listings)
 
         report(0.72, "Validating listings...")
         issues = ListingValidator(self._rules).validate(amazon, listings)
+        issues = pd.concat([issues, excluded_issues], ignore_index=True)
 
         report(0.80, "Writing the Amazon upload file...")
         # Canonical field names double as header hints so the machine-name
@@ -157,6 +201,7 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             "Shopify File": str(request.shopify_csv),
             "Amazon Template": str(request.amazon_template),
             "Fields Not In Template": ", ".join(skipped_fields) or "None",
+            "Excluded (product type not in template)": excluded_count,
         }
         summary_report = writer.write_summary_report(
             stats,
