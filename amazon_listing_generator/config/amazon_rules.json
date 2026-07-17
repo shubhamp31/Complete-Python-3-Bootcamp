@@ -133,7 +133,10 @@
       "color_name",
       "metal_stamp",
       "metal_type",
-      "fulfillment_channel_code"
+      "fulfillment_channel_code",
+      "metals_id",
+      "metals_metal_type",
+      "metals_metal_stamp"
     ],
     "allowed_themes": {
       "FINERING": [

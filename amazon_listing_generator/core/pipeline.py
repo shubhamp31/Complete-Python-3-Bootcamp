@@ -600,7 +600,10 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             if "_family_split" in listings.columns
             else pd.Series(False, index=listings.index)
         )
-        colour_fields = {"color_name", "metal_stamp", "metal_type"}
+        colour_fields = {
+            "color_name", "metal_stamp", "metal_type",
+            "metals_id", "metals_metal_type", "metals_metal_stamp",
+        }
         for field in blanked:
             if field in amazon.columns:
                 mask = is_parent & ~split if field in colour_fields else is_parent

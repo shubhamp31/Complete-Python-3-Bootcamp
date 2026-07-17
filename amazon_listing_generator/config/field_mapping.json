@@ -927,8 +927,8 @@
         "jewelry_material_categorization#1.value"
       ],
       "source": {
-        "type": "default",
-        "key": "jewelry_material_categorization"
+        "type": "internal",
+        "column": "_cat_jewelry_material_categorization"
       }
     },
     {
@@ -969,6 +969,26 @@
       "source": {
         "type": "internal",
         "column": "_cat_item_shape"
+      }
+    },
+    {
+      "amazon_field": "metals_metal_type",
+      "aliases": [
+        "metals#1.metal_type.value"
+      ],
+      "source": {
+        "type": "internal",
+        "column": "_metal_type"
+      }
+    },
+    {
+      "amazon_field": "metals_metal_stamp",
+      "aliases": [
+        "metals#1.metal_stamp.value"
+      ],
+      "source": {
+        "type": "internal",
+        "column": "_metal_stamp"
       }
     }
   ]
