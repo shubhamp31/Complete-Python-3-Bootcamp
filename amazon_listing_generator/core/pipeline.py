@@ -170,6 +170,25 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
         issues = ListingValidator(self._rules).validate(amazon, listings)
         issues = pd.concat([issues, excluded_issues], ignore_index=True)
 
+        # Optional staged uploads: "all" (default), "parents_only" to
+        # establish variation families first (parents need no product ID),
+        # or "children_only" to add the sellable rows afterwards.
+        scope = str(self._defaults.get("listing_scope", "all")).lower()
+        if scope in ("parents_only", "children_only"):
+            keep = (
+                listings["_parentage"] == "parent"
+                if scope == "parents_only"
+                else listings["_parentage"] != "parent"
+            )
+            logger.info(
+                "Listing scope '%s': writing %d of %d rows",
+                scope,
+                int(keep.sum()),
+                len(listings),
+            )
+            listings = listings[keep].reset_index(drop=True)
+            amazon = amazon[keep.to_numpy()].reset_index(drop=True)
+
         report(0.80, "Writing the Amazon upload file...")
         # Canonical field names double as header hints so the machine-name
         # header row always outscores the human display-name row above it.
