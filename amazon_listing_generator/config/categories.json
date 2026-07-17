@@ -41,6 +41,28 @@
     },
     {
       "match_keywords": [
+        "bracelet",
+        "bangle",
+        "kada",
+        "cuff"
+      ],
+      "feed_product_type": "FINENECKLACEBRACELETANKLET",
+      "product_type_label": "Bracelet",
+      "browse_node": "2152523031",
+      "amazon_fields": {
+        "item_type_name": "Bracelets",
+        "unit_count": "1",
+        "hsn_entity": "HSN Code",
+        "hsn_code": "71131144",
+        "material": "Precious Metal",
+        "size": "One Size",
+        "item_shape": "Round",
+        "is_resizable": "",
+        "jewelry_material_categorization": ""
+      }
+    },
+    {
+      "match_keywords": [
         "pendant",
         "necklace",
         "mangalsutra",
@@ -60,28 +82,6 @@
         "clasp_type": "Spring Ring",
         "is_resizable": "",
         "jewelry_material_categorization": "Fine"
-      }
-    },
-    {
-      "match_keywords": [
-        "bracelet",
-        "bangle",
-        "kada",
-        "cuff"
-      ],
-      "feed_product_type": "FINENECKLACEBRACELETANKLET",
-      "product_type_label": "Bracelet",
-      "browse_node": "2152523031",
-      "amazon_fields": {
-        "item_type_name": "Bracelets",
-        "unit_count": "1",
-        "hsn_entity": "HSN Code",
-        "hsn_code": "71131144",
-        "material": "Precious Metal",
-        "size": "One Size",
-        "item_shape": "Round",
-        "is_resizable": "",
-        "jewelry_material_categorization": ""
       }
     },
     {

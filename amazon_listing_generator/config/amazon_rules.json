@@ -258,6 +258,20 @@
       "keep_containing": [
         "Yellow Gold"
       ]
+    },
+    {
+      "feed_product_types": [
+        "FINERING",
+        "RING",
+        "EARRING",
+        "NECKLACE",
+        "FINENECKLACEBRACELETANKLET",
+        "BRACELET"
+      ],
+      "option_name": "gold color",
+      "keep_containing": [
+        "14K"
+      ]
     }
   ]
 }
