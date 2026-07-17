@@ -247,5 +247,17 @@
     "stone_color": [
       "Diamond Color (product.metafields.custom.diamond_color)"
     ]
-  }
+  },
+  "variant_filters": [
+    {
+      "feed_product_types": [
+        "FINERING",
+        "RING"
+      ],
+      "option_name": "gold color",
+      "keep_containing": [
+        "Yellow Gold"
+      ]
+    }
+  ]
 }

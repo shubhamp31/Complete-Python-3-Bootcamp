@@ -103,6 +103,7 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
 
         report(0.12, "Classifying products...")
         variants = self._categorise(variants)
+        variants = self._apply_variant_filters(variants)
 
         report(0.15, "Building parent/child variations...")
         listings = VariationBuilder(self._rules).build(variants)
@@ -324,6 +325,45 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             for field, value in category.get("amazon_fields", {}).items():
                 frame.loc[mask, f"_cat_{field}"] = str(value)
             unmatched &= ~mask
+        return frame
+
+    def _apply_variant_filters(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """Drop variants excluded by configuration.
+
+        Each filter in ``amazon_rules.json`` names the product types it
+        applies to, an option, and the value substrings to keep - e.g.
+        list rings only in Yellow Gold while other categories keep all
+        colours.
+        """
+        for rule in self._rules.get("variant_filters", []):
+            types = {str(t).upper() for t in rule.get("feed_product_types", [])}
+            option_name = str(rule.get("option_name", "")).strip().lower()
+            keeps = [str(k).lower() for k in rule.get("keep_containing", [])]
+            if not types or not option_name or not keeps:
+                continue
+            in_scope = frame["_feed_product_type"].astype(str).str.upper().isin(types)
+            value = pd.Series("", index=frame.index)
+            for slot in (1, 2, 3):
+                name_col, value_col = f"Option{slot} Name", f"Option{slot} Value"
+                if name_col in frame.columns and value_col in frame.columns:
+                    matches = (
+                        frame[name_col].astype(str).str.strip().str.lower()
+                        == option_name
+                    )
+                    value = value.mask(matches, frame[value_col].astype(str))
+            lowered = value.str.lower()
+            keep_value = lowered.map(lambda v: any(k in v for k in keeps))
+            drop = in_scope & (value != "") & ~keep_value
+            if drop.any():
+                logger.info(
+                    "Variant filter: dropping %d variants of %s where %s "
+                    "does not contain %s",
+                    int(drop.sum()),
+                    "/".join(sorted(types)),
+                    option_name,
+                    " or ".join(rule.get("keep_containing", [])),
+                )
+                frame = frame[~drop].reset_index(drop=True)
         return frame
 
     def _enrich(self, frame: pd.DataFrame) -> pd.DataFrame:
