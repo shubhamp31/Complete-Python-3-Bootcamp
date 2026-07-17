@@ -42,5 +42,6 @@
     "tri-shine-pure-gold-lab-diamond-pendant",
     "tri-shine-pure-gold-lab-diamond-stud-earrings"
   ],
-  "listing_scope": "all"
+  "listing_scope": "all",
+  "external_product_id_type_fallback": "GTIN Exempt"
 }

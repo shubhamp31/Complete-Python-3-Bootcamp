@@ -418,11 +418,13 @@ class AmazonIndiaPipeline(MarketplaceGenerator):
             )
 
         # --- barcode type ---------------------------------------------------
+        # Products without a barcode fall back to the configured type
+        # (e.g. "GTIN Exempt" once the brand's exemption is approved).
         barcode = col("Variant Barcode").str.replace(r"\D", "", regex=True)
         frame["_external_id_type"] = np.select(
             [barcode.str.len() == 13, barcode.str.len() == 12, barcode.str.len() == 14],
             ["EAN", "UPC", "GTIN"],
-            default="",
+            default=str(self._defaults.get("external_product_id_type_fallback", "")),
         )
 
         # --- gold colour option: split "14K Yellow Gold" -------------------
